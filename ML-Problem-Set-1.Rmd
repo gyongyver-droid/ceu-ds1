@@ -1,0 +1,256 @@
+---
+title: "ML-Problem-Set-1"
+author: "Gyongyver Kamenar (2103380)"
+date: "2/26/2022"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+ 
+Loading libraries
+ 
+```{r Load}
+library(tidyverse)
+library(ggplot2)
+library(kableExtra)
+# My theme
+devtools::source_url('https://raw.githubusercontent.com/gyongyver-droid/ceu-data-analysis/master/Assignment1/theme_gyongyver.R')
+theme_set(theme_gyongyver())
+```
+
+# Problem 1
+
+## A)
+Write a function that implements the local averaging estimator 
+
+
+```{r Local avergaging function}
+
+LocalAveraging<-function(sample_x, sample_y, x, h){
+  sum(sample_y * ifelse( abs(sample_x - x)<=(h/2),1,0)) / sum(ifelse( abs(sample_x - x)<=(h/2),1,0))
+}
+
+
+```
+
+## B)
+ Generate a sample of n = 300 observations from the mod
+
+
+```{r Generate sample}
+
+#set.seed(2323)
+sample_x <- runif(300, min=0, max = 2)
+#set.seed(2323)
+e <- rnorm(300, mean = 0, sd=1)
+sample_y <- sample_x^3 - 3.5 * sample_x^2 + 3 * sample_x + e
+optimal_y <- sample_x^3 - 3.5 * sample_x^2 + 3 * sample_x
+# Visualize
+ggplot(data.frame("x"=sample_x), aes(x))+ geom_histogram(fill="midnightblue", color="grey50", alpha=0.9)+labs(title = "Distribution of sample X")
+
+ggplot(data.frame("y"=sample_y), aes(y))+ geom_histogram(fill="midnightblue", color="grey50", alpha=0.9)+labs(title = "Distribution of sample Y")
+
+ggplot(data.frame("y"=optimal_y), aes(y))+ geom_histogram(fill="midnightblue", color="grey50", alpha=0.9)+labs(title = "Distribution of optimal Y")
+```
+
+
+## C)
+Estimate f∗(x) = E(Y | X = x) at x = 1 and x = 0.1 for a fine grid of bandwidthvalues over [0.05,2].
+
+```{r Estimate}
+# Calc
+bandwidth_values <- seq(0.05,2,0.05)
+# x=1
+map_dbl(bandwidth_values,  ~{ LocalAveraging(sample_x = sample_x, sample_y = sample_y, x=1, h=.x)} ) 
+# x=0.1
+map_dbl(bandwidth_values,  ~{ LocalAveraging(sample_x = sample_x, sample_y = sample_y, x=0.1, h=.x)} ) 
+
+```
+
+## D)
+
+Repeat steps b) and c) many times, say, 1000. Compute bias^2, Var[f^h(x)] andMSE[f^h(x)] = bias2[f^h(x)] + Var[f^h(x)] for each h and x = 0.1, 1. Plot these quantities as a function of h.
+
+```{r}
+SimulateLocalAverage<-function(x_point=1, bandwidth=seq(0.05,2,0.05), sample_size=300){
+  # Generate sample
+  sample_x <- runif(sample_size, min=0, max = 2)
+  e <- rnorm(sample_size)
+  sample_y <- sample_x^3 - 3.5 * sample_x^2 + 3 * sample_x + e
+  optimal_y <- sample_x^3 - 3.5 * sample_x^2 + 3 * sample_x
+  # Local averaging
+  #loc_avg <- LocalAveraging(sample_x = sample_x, sample_y = sample_y, x=x_point, h=bandwidth)
+  
+  map_df(bandwidth, ~{
+    tibble(
+    bandwidth = .x,
+    loc_avg = as.numeric(LocalAveraging(sample_x = sample_x, sample_y = sample_y, x=x_point, h=.x )),
+    error = as.numeric((x_point^3 - 3.5 * x_point^2 + 3 * x_point) - loc_avg)
+    )
+  })
+}
+
+# Simulate 1000 times
+n <-1000
+# x_point = 1
+results_df_x1 <-data.frame()
+for(i in 1:n){
+  results_df_x1<- rbind(results_df_x1, SimulateLocalAverage(x=1))
+  
+}
+results_df_x1 %>% group_by(bandwidth) %>% summarise(bias=mean(error)^2, var = var(loc_avg), mse=bias+var)
+
+
+# Visualize function
+VisualizeResult<-function(results){
+  results %>% group_by(bandwidth) %>% summarise(bias = mean(error, na.rm=T)^2, var = var(loc_avg,na.rm = T), mse=bias+var) %>%
+    ggplot(aes(x=bandwidth))+
+    geom_line(aes(y=bias, color="Bias"), size=1.5, alpha=0.8)+
+    geom_line(aes(y=var, color="Variance"),size=1.5, alpha=0.8)+
+    geom_line(aes(y=mse, color="MSE"),size=1, alpha=0.8)+
+    scale_colour_manual("", 
+                      breaks = c("Bias", "Variance", "MSE"),
+                      values = c("blue", "green", "red"))
+}
+
+
+VisualizeResult(results_df_x1)+ labs(title = "Metrics for X=1", y="")
+
+# x_point = 0.1
+results_df_x01 <-data.frame()
+for(i in 1:n){
+  results_df_x01<- rbind(results_df_x01, SimulateLocalAverage(x=0.1))
+  
+}
+
+results_df_x01 %>% group_by(bandwidth) %>% summarise(bias=mean(error)^2, var = var(loc_avg), mse=bias+var)
+
+# Visualize
+VisualizeResult(results_df_x01)+ labs(title = "Metrics for X=0.1", y="")
+
+
+```
+
+
+## E)
+
+The plot 
+
+
+# Problem 2
+
+## A)
+
+Generate a sample of size n = 1000 from the model with k = 5 and k = 8. Implement the local averaging estimator ˆfh(x) for h = 1, 1.5, 2, 2.5, 3, 3.5, 4. You will find that the estimator is often not well defined for the smaller values of h.
+Why? Make sure that your code can handle this event, i.e., it does not stop running with an error message.
+
+```{r Simulate 2}
+LocalAveraging2<-function(sample_x, sample_y, x=1, h=seq(1,4,0.5)){
+  sum(sample_y * ifelse( map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))/ sum(ifelse(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))
+
+}
+
+
+# k=5
+n <- 1000
+k <- 5
+h <- seq(1,4,0.5)
+x=1
+sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
+e <- rnorm(n,0,1)
+sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
+map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, h=.x) )
+
+# why
+x_vector = 2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f")))
+ggplot(data.frame("X"=x_vector), aes(X))+ 
+  geom_histogram(fill="midnightblue", color="grey50", alpha=0.9)+
+  labs(title = "Distribution of 2 * ||X_i-x||", subtitle = "k=5",y="")+
+  scale_x_continuous(breaks = seq(0,22.5,2.5))+
+  geom_vline(aes(xintercept=min(X)), color="red")+
+  geom_text(aes(x=min(x), y=50, label=paste("Min:\n",round(min(X),3))), color="red")+
+  geom_vline(aes(xintercept=4),color="green")+
+  geom_text(aes(x=4.2, y=80, label="4"), color="green")+
+  theme(legend.position = "none")
+
+
+
+
+```
+
+The values of $$ 2 * || X_i-x || $$ are mostly above $$ h $$ as we can see on the above histogram. The minimum value is `r min(x_vector)` so for $$h$$ below that, we do not have any observation to evaluate, the denominator will be 0. Therefore the local average estimator cannot be defined in these cases.
+
+```{r k=8}
+# k=8
+n <- 1000
+k <- 8
+h <- seq(1,4,0.5)
+sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
+e <- rnorm(n,0,1)
+sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
+map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, .x) )
+
+# Why
+x_vector = 2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f")))
+ggplot(data.frame("X"=x_vector), aes(X))+ 
+  geom_histogram(fill="midnightblue", color="grey50", alpha=0.9)+
+  labs(title = "Distribution of 2 * ||X_i-x||", subtitle = "k=8", y="")+
+  scale_x_continuous(breaks = seq(0,22.5,2.5))+
+  geom_vline(aes(xintercept=min(X)), color="red")+
+  geom_text(aes(x=min(x), y=50, label=paste("Min:\n",round(min(X),3))), color="red")+
+  geom_vline(aes(xintercept=4),color="green")+
+  geom_text(aes(x=4.2, y=80, label="4"), color="green")+
+  theme(legend.position = "none")
+
+
+
+```
+
+
+
+## B)
+
+```{r Repeat 1000 times}
+
+SimulateModel2<-function(n=1000,k=5,h=seq(1,4,0.5)){
+  # Generate sample
+  sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
+  e <- rnorm(n,0,1)
+  sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
+  x_eval <- matrix(1, ncol = dim(sample_x)[2])
+  #Estimation
+  map_df(h, 
+         ~{
+           tibble(bandwidth = .x,
+                  loc_avg =as.numeric(LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, .x)),
+                  error = as.numeric((prod(x_eval)+1) - loc_avg)
+           ) }
+         
+         )
+  
+}
+
+results_model2<-map_df(seq(1000), SimulateModel2 )
+results_model2
+
+# % defined
+defined <-results_model2 %>% group_by(loc_avg=="NaN") %>% count()
+defined[2,2] / sum(defined[,2]) * 100
+
+# bias, sd, RMSE
+summary <-results_model2 %>% group_by(bandwidth) %>% summarise(Bias = mean(error, na.rm=T)^2, SD =sd(loc_avg, na.rm = T), RMSE = sqrt(Bias+var(loc_avg, na.rm = T)) )
+summary %>% ggplot(aes(x=bandwidth))+geom_line(aes(y=Bias), color="blue")+geom_line(aes(y=SD), color="green")+geom_line(aes(y=RMSE), color="red")
+# as % of true value? what is the true value????
+
+
+```
+

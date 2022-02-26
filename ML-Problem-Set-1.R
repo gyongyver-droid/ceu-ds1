@@ -117,7 +117,7 @@ results_df_x01 %>% group_by(bandwidth) %>% summarise(bias = mean(error, na.rm=T)
 LocalAveraging2<-function(sample_x, sample_y, x=1, h=seq(1,4,0.5)){
   
   local_avg_estimate <-sum(sample_y * ifelse( map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))/ sum(ifelse(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))
-  ifelse(local_avg_estimate=="NaN",0, local_avg_estimate)
+  #ifelse(local_avg_estimate=="NaN",0, local_avg_estimate)
 }
 
 x=1
@@ -127,7 +127,7 @@ k <- 5
 h <- seq(1,4,0.5)
 sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
 e <- rnorm(n,0,1)
-sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])
+sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
 
 map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, h=.x) )
 
@@ -142,7 +142,7 @@ k <- 8
 h <- seq(1,4,0.5)
 sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
 e <- rnorm(n,0,1)
-sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])
+sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
 map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, .x) )
 
 hist(2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))))
@@ -150,12 +150,37 @@ hist(2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "
 
 ###### B)
 
-
-
-
-
-
-
-
-
+SimulateModel2<-function(n=1000,k=5,h=seq(1,4,0.5)){
+  # Generate sample
+  sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
+  e <- rnorm(n,0,1)
+  sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
+  x_eval <- matrix(1, ncol = dim(sample_x)[2])
+  #Estimation
+  map_df(h, 
+         ~{
+           tibble(bandwidth = .x,
+                  loc_avg =as.numeric(LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, .x)),
+                  error = as.numeric((prod(x_eval)+1) - loc_avg)
+           ) }
+         
+         )
   
+}
+
+results_model2<-map_df(seq(1000), SimulateModel2 )
+results_model2
+
+# % defined
+defined <-results_model2 %>% group_by(loc_avg=="NaN") %>% count()
+defined[2,2] / sum(defined[,2]) * 100
+
+# bias, sd, RMSE
+summary <-results_model2 %>% group_by(bandwidth) %>% summarise(Bias = mean(error, na.rm=T)^2, SD =sd(loc_avg, na.rm = T), RMSE = sqrt(Bias+var(loc_avg, na.rm = T)) )
+summary %>% ggplot(aes(x=bandwidth))+geom_line(aes(y=Bias), color="blue")+geom_line(aes(y=SD), color="green")+geom_line(aes(y=RMSE), color="red")
+# as % of true value? what is the true value????
+
+
+######### C)
+
+map_df(seq(1000), SimulateModel2, k=8 ) %>% group_by(loc_avg=="NaN") %>% count()
