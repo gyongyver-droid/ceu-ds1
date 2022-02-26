@@ -25,7 +25,7 @@ LocalAveraging2<-function(sample_x, sample_y, x, h){
 # B)
 set.seed(2323)
 sample_x <- runif(300, min=0, max = 2)
-#set.seed(2323)
+set.seed(2323)
 e <- rnorm(300)
 sample_y <- sample_x^3 - 3.5 * sample_x^2 + 3 * sample_x + e
 hist(sample_y)
@@ -66,25 +66,40 @@ SimulateLocalAverage<-function(x_point=1, bandwidth=seq(0.05,2,0.05), sample_siz
 }
 
 # Simulate 1000 times
-n <-3
+n <-1000
 # x_point = 1
 #Loc_avg<-map_dbl( bandwith_values, ~{SimulateLocalAverage(x_point = 1,bandwidth =.x, sample_size = 300) })
 map_df(seq(n), SimulateLocalAverage)
 results_df_x1 <-map_df(seq_len(n), SimulateLocalAverage)
-results_df_x1 %>% group_by(bandwidth) %>% summarise(mean=mean(as.numeric(error)))
-data.frame(results_df_x1)
+results_df_x1 <-data.frame()
+
+for(i in 1:n){
+  results_df_x1<- rbind(results_df_x1, SimulateLocalAverage(x=1))
+  
+}
+results_df_x1 %>% group_by(bandwidth) %>% summarise(mean=mean(error))
+
+
+# Visualize
 results_df_x1 %>% group_by(bandwidth) %>% summarise(bias = mean(error, na.rm=T)^2, var = var(loc_avg,na.rm = T), mse=bias+var) %>%
-    ggplot(aes(x=bandwidth))+geom_line(aes(y=bias), color="blue")+geom_line(aes(y=var), color="green")+geom_line(aes(y=mse), color="red")
+    ggplot(aes(x=bandwidth))+geom_line(aes(y=bias), color="blue", size=1.5)+geom_line(aes(y=var), color="green",size=1.5)+geom_line(aes(y=mse), color="red",size=1.5, alpha=0.8)
 
 
 # x_point = 0.1
-results_df_x01 <-map_dfc(seq_len(n), ~{
-  loc_avg<-map_dbl( bandwith_values, ~{SimulateLocalAverage(x_point =0.1,bandwidth =.x, sample_size = 300) })
-  tibble(simulation = loc_avg)
-} )
+results_df_x01 <-data.frame()
+
+for(i in 1:n){
+  results_df_x01<- rbind(results_df_x01, SimulateLocalAverage(x=0.1))
+  
+}
+
+results_df_x01 %>% group_by(bandwidth) %>% summarise(bias=mean(error)^2)
 
 
-results_df_x01<-cbind(bandwith_values,results_df_x01)
+# Visualize
+results_df_x01 %>% group_by(bandwidth) %>% summarise(bias = mean(error, na.rm=T)^2, var = var(loc_avg,na.rm = T), mse=bias+var) %>%
+  ggplot(aes(x=bandwidth))+geom_line(aes(y=bias), color="blue", size=1.5)+geom_line(aes(y=var), color="green",size=1.5)+geom_line(aes(y=mse), color="red",size=1.5, alpha=0.8)
+
 
 
 # E) 
@@ -95,13 +110,16 @@ results_df_x01<-cbind(bandwith_values,results_df_x01)
 
 ####### A)
 
-LocalAveraging2<-function(sample_x, sample_y, x, h){
-  sum(sample_y * ifelse( norm(as.matrix(sample_x - x), type = "f")<=(h/2),1,0))/ sum(ifelse( norm(as.matrix(sample_x - x), type="f")<=(h/2),1,0))
+# LocalAveraging3<-function(sample_x, sample_y, x, h){
+#   sum(sample_y * ifelse( norm(as.matrix(sample_x - x), type = "f")<=(h/2),1,0))/ sum(ifelse( norm(as.matrix(sample_x - x), type="f")<=(h/2),1,0))
+# }
+
+LocalAveraging2<-function(sample_x, sample_y, x=1, h=seq(1,4,0.5)){
+  
+  local_avg_estimate <-sum(sample_y * ifelse( map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))/ sum(ifelse(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))
+  ifelse(local_avg_estimate=="NaN",0, local_avg_estimate)
 }
 
-LocalAveraging3<-function(sample_x, sample_y, x=1, h){
-  sum(sample_y * ifelse( map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))/ sum(ifelse(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))
-}
 x=1
 # k=5
 n <- 1000
@@ -110,7 +128,9 @@ h <- seq(1,4,0.5)
 sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
 e <- rnorm(n,0,1)
 sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])
-map_dbl(h, ~LocalAveraging3(sample_x = sample_x, sample_y = sample_y, x=1, h=.x) )
+
+map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, h=.x) )
+
 # why
 hist(2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))))
 # check
@@ -119,14 +139,17 @@ hist(2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "
 # k=8
 n <- 1000
 k <- 8
-h <- seq(1,10,0.5)
+h <- seq(1,4,0.5)
 sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
 e <- rnorm(n,0,1)
 sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])
-map_dbl(h, ~LocalAveraging3(sample_x = sample_x, sample_y = sample_y, x=1, .x) )
+map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, .x) )
+
+hist(2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))))
 
 
 ###### B)
+
 
 
 
