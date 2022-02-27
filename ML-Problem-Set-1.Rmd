@@ -43,7 +43,7 @@ LocalAveraging<-function(sample_x, sample_y, x, h){
 ```
 
 ## B)
- Generate a sample of n = 300 observations from the mod
+ Generate a sample of n = 300 observations from the model
 
 
 ```{r Generate sample}
@@ -143,8 +143,9 @@ VisualizeResult(results_df_x01)+ labs(title = "Metrics for X=0.1", y="")
 
 
 ## E)
+Interpret the patterns you see in the plots produced under part d). In particular, compare the bias for x = 0.1 and x = 1. Can you propose an explanation for the difference?
 
-The plot 
+Comparing the 2 plots we can see, that the variance (as the function of bandwidth) is similar for both evaluation point. However, the bias is really different. In the case of x=1
 
 
 # Problem 2
@@ -178,7 +179,7 @@ ggplot(data.frame("X"=x_vector), aes(X))+
   labs(title = "Distribution of 2 * ||X_i-x||", subtitle = "k=5",y="")+
   scale_x_continuous(breaks = seq(0,22.5,2.5))+
   geom_vline(aes(xintercept=min(X)), color="red")+
-  geom_text(aes(x=min(x), y=50, label=paste("Min:\n",round(min(X),3))), color="red")+
+  geom_text(aes(x=min(X), y=50, label=paste("Min:\n",round(min(X),3))), color="red")+
   geom_vline(aes(xintercept=4),color="green")+
   geom_text(aes(x=4.2, y=80, label="4"), color="green")+
   theme(legend.position = "none")
@@ -207,7 +208,7 @@ ggplot(data.frame("X"=x_vector), aes(X))+
   labs(title = "Distribution of 2 * ||X_i-x||", subtitle = "k=8", y="")+
   scale_x_continuous(breaks = seq(0,22.5,2.5))+
   geom_vline(aes(xintercept=min(X)), color="red")+
-  geom_text(aes(x=min(x), y=50, label=paste("Min:\n",round(min(X),3))), color="red")+
+  geom_text(aes(x=min(X), y=50, label=paste("Min:\n",round(min(X),3))), color="red")+
   geom_vline(aes(xintercept=4),color="green")+
   geom_text(aes(x=4.2, y=80, label="4"), color="green")+
   theme(legend.position = "none")
@@ -249,26 +250,44 @@ results_k5
 # % defined
 GetDefined<-function(results_k){
   defined <-results_k %>% group_by(loc_avg=="NaN") %>% count()
-  unlist(defined[2,2] / sum(defined[,2]) * 100)
+  unlist(defined[1,2] / sum(defined[,2]) * 100)
 }
 
 GetDefined(results_k5)
-
+results_k5 %>% group_by(bandwidth) %>% count("NAN"=is.na(loc_avg)) 
+results_k5 %>% group_by(bandwidth) %>% summarise(NAN =sum(is.na(loc_avg)), defined=sum(!is.na(loc_avg)))
 # bias, sd, RMSE
 SummariseError<-function(simulated_data){
-  simulated_data %>% group_by(bandwidth) %>% summarise(Bias = mean(error, na.rm=T)^2, SD =sd(loc_avg, na.rm = T), RMSE = sqrt(Bias+var(loc_avg, na.rm = T)) )
+  simulated_data %>% group_by(bandwidth) %>% summarise(mean_f_hat=mean(loc_avg,na.rm=T),
+                                                       defined_rate_ptc=sum(!is.na(loc_avg)) /(sum(is.na(loc_avg))+sum(!is.na(loc_avg))), 
+                                                       Bias = mean(error, na.rm=T)^2, SD =sd(loc_avg, na.rm = TRUE), 
+                                                       RMSE = sqrt(Bias+var(loc_avg, na.rm = T)) )
 }
 
-summary <-SummariseError(results_k5)
-
+summary<-SummariseError(results_k5)
+summary
 # Metrics as the rate of true value
 MetricRate<-function(summary_data,true_value=2){
- summary_data %>% summarise(bandwidth,Bias, SD,RMSE, Bias_rate = Bias/true_value*100, SD_rate = SD/true_value*100, RMSE_rate=RMSE/true_value*100) 
+ summary_data %>% summarise(bandwidth,Bias, SD,RMSE,defined_rate_ptc, Bias_rate = Bias/true_value, SD_rate = SD/true_value, RMSE_rate=RMSE/true_value) 
 }
 
 MetricRate(summary)
 
+# Visualize
+ShowMetricRate<-function(data){
+  ggplot(data, aes(x=bandwidth))+
+    geom_line(aes(y=Bias_rate, color="Bias rate"), size=1.5)+
+    geom_line(aes(y=SD_rate, color="SD rate"), size=1.5)+
+    geom_line(aes(y=RMSE_rate, color="RMSE rate"), size=1.3)+
+    geom_line(aes(y=defined_rate_ptc, color="Defined rate"), size=1.1)+
+    scale_colour_manual("", 
+                      breaks = c("Bias rate", "SD rate", "RMSE rate","Defined rate"),
+                      values = c("blue", "green", "red", "black"))+
+    labs(y="% of true value", title = "Error metrics as the % of true value at x=1")+
+    scale_y_continuous(labels = scales::percent)
+}
 
+MetricRate(summary) %>%  ShowMetricRate()
 ```
 
 
@@ -280,20 +299,73 @@ results_k8<-data.frame()
 results_k8<-map_df(seq(1000), SimulateModel2,k=8 )
 results_k8
 
-# % defined
-GetDefined(results_k8)
 
-# bias, sd, RMSE
+# defined, bias, sd, RMSE
 SummariseError(results_k8)
 
 # Get rate as the true value
 SummariseError(results_k8) %>% MetricRate()
 
-summary_k8 %>% ggplot(aes(x=bandwidth))+geom_line(aes(y=Bias), color="blue")+geom_line(aes(y=SD), color="green")+geom_line(aes(y=RMSE), color="red")
-
+# Visualize
+SummariseError(results_k8) %>% MetricRate() %>% ShowMetricRate()
 ```
 
 
 ## C)
 
 Repeat parts a) and b) with n = 10, 000.
+
+```{r n=10000}
+# Simulate for n=10000
+results_k5_n10000 <-data.frame()
+n<-1000
+for(i in 1:n){
+  results_k5_n10000<- rbind(results_k5_n10000, SimulateModel2(n=10000))
+  
+}
+#results_k5_n10000 <- map_df(seq(1000), SimulateModel2, n=10000, h=seq(1,4,0.5))
+# % of defined
+GetDefined(results_k5_n10000)
+# bias, sd, rmse
+SummariseError(results_k5_n10000)
+#Get rate of the true value
+SummariseError(results_k5_n10000) %>% MetricRate()
+
+# Visualize
+SummariseError(results_k5_n10000) %>% MetricRate() %>% ShowMetricRate()
+
+```
+
+
+```{r n=10000, k=8}
+
+results_k8_n10000 <-data.frame()
+n<-1000
+for(i in 1:n){
+  results_k8_n10000<- rbind(results_k8_n10000, SimulateModel2(n=10000))
+  
+}
+#results_k8_n10000 <- map_df(seq(1000), SimulateModel2,k=8, n=10000,h=seq(1,4,0.5))
+# % of defined
+GetDefined(results_k8_n10000)
+# bias, sd, rmse
+SummariseError(results_k8_n10000)
+#Get rate of the true value
+SummariseError(results_k8_n10000) %>% MetricRate()
+
+# Visualize
+SummariseError(results_k8_n10000) %>% MetricRate() %>% ShowMetricRate()
+
+
+
+```
+
+
+## D)
+Discuss the results.
+
+
+# Problem 3
+
+## A)
+
