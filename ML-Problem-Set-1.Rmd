@@ -175,7 +175,9 @@ LocalAveraging2<-function(sample_x, sample_y, x=1, h=seq(1,4,0.5)){
   sum(sample_y * ifelse( map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))/ sum(ifelse(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))
 
 }
-
+LocalAveraging3<-function(sample_x, sample_y, x=1, h=seq(1,4,0.5)){
+  mean(sample_y * ifelse( map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))
+}
 # k=5 simulation
 n <- 1000
 k <- 5
@@ -185,7 +187,7 @@ sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
 e <- rnorm(n,0,1)
 sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
 # estimates
-map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, h=.x) )
+map_dbl(h, ~LocalAveraging3(sample_x = sample_x, sample_y = sample_y, x=1, h=.x) )
 
 # why?
 x_vector = 2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f")))
@@ -398,13 +400,19 @@ ggarrange(k5, k8, nrow=1)
 
 The above charts show the metrics rate of the true value and the rate when the estimator was defined for n=1000 sample size, k=5 and k=8 dimensions respectively. For k=5 the defined rate is steeply increasing with higher bandwidth and eventually (at 4) it is reaching ~95%. The bias is relatively small but increasing while the variance is much higher (~50%) but decreasing with higher bandwidth and defined rate.
 
-On the other hand, with k=8 dimensions the defined rate remains low by reaching only ~5% at bandwidth=3 and ~30% at bandwidth=4. Thus measures are less robust and pretty unreliable for bandwidth below 3. At the highest defined rate on the given interval the bias is similar to the k=5 value but the variance is much higher. Actually, we cannot draw lot of conclusion from the k=8 case because of the low defined rate, every single time the simulation will be different and result different bias and variance measures. 
+On the other hand, with k=8 dimensions the defined rate remains low by reaching only ~5% at bandwidth=3 and ~30% at bandwidth=4. Thus measures are less robust and pretty unreliable for bandwidth below 3. The bias and variance are much higher then in the k=5 case. But we cannot see the parrern of increasing bias and decreasing variance.
+Actually, we cannot draw lot of conclusion from the k=8 case because of the low defined rate, every single time the simulation will be different and results different bias and variance measures. 
 
 ```{r, fig.width=15, fig.height=7}
 ggarrange(k5_10k, k8_10k, nrow=1)
 ```
 
-In the case if 10000 sample size teh defined rete is much higher for both cases .
+In the case if 10000 sample size the defined rate is much higher for both cases . It is understandable, because there are more observations in the sample, it's more likely that any of them will be within bandwidth so the local average estimator can be defined. With higher defined rate, the bias and variance curves are also more reliable. In the case of k=5 we can clearly see that the bias is increasing and the variance is decreasing with larger bandwidth. 
+
+In the k=8 case the 10000 sample size is much better but is still only reaches ~100% defined rate around bandwidth = 4. We can somewhat see the pattern of increasing bias and decreasing variance but there are some deviation. Besides, it took ~30 times more to do the simulation with sample size = 10000. 
+
+In conclusion, the higher dimension sample require more data to appropriately evaluate and the information provided by a few more dimensions might not worth the time and effort. Besides, we have to carefully select the dimension of predictors based on the available sample data and the estimator function. 
+
 
 # Problem 3
 
