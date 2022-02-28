@@ -1,12 +1,18 @@
 ---
 title: "ML-Problem-Set-1"
 author: "Gyongyver Kamenar (2103380)"
-date: "2/26/2022"
+date: "2/22/2022"
 output:
   prettydoc::html_pretty:
     theme: architect
     df_print: paged
 ---
+
+<style>
+body {
+text-align: justify}
+</style>
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
@@ -145,7 +151,13 @@ VisualizeResult(results_df_x01)+ labs(title = "Metrics for X=0.1", y="")
 ## E)
 Interpret the patterns you see in the plots produced under part d). In particular, compare the bias for x = 0.1 and x = 1. Can you propose an explanation for the difference?
 
-Comparing the 2 plots we can see, that the variance (as the function of bandwidth) is similar for both evaluation point. However, the bias is really different. In the case of x=1
+
+Comparing the 2 plots we can see, that the variance (as the function of bandwidth) is similar for both evaluation point. However, the bias is really different. In the case of x=1 we can see that the bias is around 0 and than it is just slightly increasing after that. In the case of x=0.1 evaluation point the bias is around 0 until 0.25 bandwidth and that it's steeply increasing (and somewhat diminishing around 1.6 but not relevantly) .  
+
+I my opinion, it can be explained by the distribution of $X ~unif(min=0, max=2)$ sample. So if we pick the evaluation point x=1, it is in the middle of the sample, so for each chosen bandhwidth the distribution of local X values will be "symmetric" around x=1.
+
+However, if we pick the evaluation point x=0.1 it is at the edge of the sample. The minimum of x sample is 0, so for bandwidth > 0.2 we will include $ X_i$ values above the evaluation point, because basically there are no more points below  0.1 - (0.2/2)=0. Therefore, we introduce an upward bias based on the local average estimator. 
+
 
 
 # Problem 2
@@ -155,14 +167,16 @@ Comparing the 2 plots we can see, that the variance (as the function of bandwidt
 Generate a sample of size n = 1000 from the model with k = 5 and k = 8. Implement the local averaging estimator ˆfh(x) for h = 1, 1.5, 2, 2.5, 3, 3.5, 4. You will find that the estimator is often not well defined for the smaller values of h.
 Why? Make sure that your code can handle this event, i.e., it does not stop running with an error message.
 
+
+I implemented a new local averaging function which can handle multi-dimentional predictors:
+
 ```{r Simulate 2}
 LocalAveraging2<-function(sample_x, sample_y, x=1, h=seq(1,4,0.5)){
   sum(sample_y * ifelse( map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))/ sum(ifelse(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f"))<=(h/2),1,0))
 
 }
 
-
-# k=5
+# k=5 simulation
 n <- 1000
 k <- 5
 h <- seq(1,4,0.5)
@@ -170,13 +184,14 @@ x=1
 sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
 e <- rnorm(n,0,1)
 sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
+# estimates
 map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, h=.x) )
 
-# why
+# why?
 x_vector = 2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f")))
 ggplot(data.frame("X"=x_vector), aes(X))+ 
   geom_histogram(fill="midnightblue", color="grey50", alpha=0.9)+
-  labs(title = "Distribution of 2 * ||X_i-x||", subtitle = "k=5",y="")+
+  labs(title = "Distribution of 2 * ||X_i-x||", subtitle = "k=5",y="",x="")+
   scale_x_continuous(breaks = seq(0,22.5,2.5))+
   geom_vline(aes(xintercept=min(X)), color="red")+
   geom_text(aes(x=min(X), y=50, label=paste("Min:\n",round(min(X),3))), color="red")+
@@ -186,26 +201,31 @@ ggplot(data.frame("X"=x_vector), aes(X))+
 
 
 
-
 ```
 
-The values of $$ 2 * || X_i-x || $$ are mostly above $$ h $$ as we can see on the above histogram. The minimum value is `r min(x_vector)` so for $$h$$ below that, we do not have any observation to evaluate, the denominator will be 0. Therefore the local average estimator cannot be defined in these cases.
+
+As we can see, the estimator was indeed not defined for smaller values of h. The reason behind this is based on the local averaging formula. 
+Transforming the conditional term, we get that $2 * || X_i-x || <= h$
+
+
+The values of $2 * || X_i-x ||$ are mostly above $h=4$ as we can see on the above histogram. The minimum value is `r round(min(x_vector),3)` so for $h$ below that, we do not have any observation to evaluate, the nominator and denominator of the local averaging function will be 0. Therefore the local average estimator cannot be defined in these cases. My function will give NA-s, which I can filter for before calculating the needed measures.
 
 ```{r k=8}
-# k=8
+# k=8 simulation
 n <- 1000
 k <- 8
 h <- seq(1,4,0.5)
 sample_x <- matrix(rnorm(n * k, mean = 0, sd=2), nrow = n, ncol = k)
 e <- rnorm(n,0,1)
 sample_y <- map_dbl(seq_len(n), ~prod(sample_x[.x,])+e[.x])+1
+# estimates
 map_dbl(h, ~LocalAveraging2(sample_x = sample_x, sample_y = sample_y, x=1, .x) )
 
 # Why
 x_vector = 2*(map_dbl(seq(nrow(sample_x)), ~norm(as.matrix(sample_x[.x,]- x), type = "f")))
 ggplot(data.frame("X"=x_vector), aes(X))+ 
   geom_histogram(fill="midnightblue", color="grey50", alpha=0.9)+
-  labs(title = "Distribution of 2 * ||X_i-x||", subtitle = "k=8", y="")+
+  labs(title = "Distribution of 2 * ||X_i-x||", subtitle = "k=8", y="",x="")+
   scale_x_continuous(breaks = seq(0,22.5,2.5))+
   geom_vline(aes(xintercept=min(X)), color="red")+
   geom_text(aes(x=min(X), y=50, label=paste("Min:\n",round(min(X),3))), color="red")+
@@ -217,13 +237,18 @@ ggplot(data.frame("X"=x_vector), aes(X))+
 
 ```
 
+The same is the case for $k=8$ but the values are higher as you can see on the histogram above. The minimum of $2 * || X_i-x ||$ is `r round(min(x_vector),3)` so for $h$ below that the estimator will not be defined. 
 
 
 ## B)
 
 Repeat part a) many times, say, 1000. For each value of h, report i) the % of the time that the estimator was well defined; ii) the bias of the estimator; iii) the standard deviation of the estimator; iv) the root mean squared error ((bias2 + var)1/2) as a percentage of the true value of E(Y | X = x). (When you calculate the bias, standard deviation, etc., use only the cases in which the estimator was well defined.)
 
+
+### k=5
+
 ```{r Repeat 1000 times}
+# Simulation function
 
 SimulateModel2<-function(n=1000,k=5,h=seq(1,4,0.5)){
   # Generate sample
@@ -254,12 +279,11 @@ GetDefined<-function(results_k){
 }
 
 GetDefined(results_k5)
-results_k5 %>% group_by(bandwidth) %>% count("NAN"=is.na(loc_avg)) 
-results_k5 %>% group_by(bandwidth) %>% summarise(NAN =sum(is.na(loc_avg)), defined=sum(!is.na(loc_avg)))
+
 # bias, sd, RMSE
 SummariseError<-function(simulated_data){
   simulated_data %>% group_by(bandwidth) %>% summarise(mean_f_hat=mean(loc_avg,na.rm=T),
-                                                       defined_rate_ptc=sum(!is.na(loc_avg)) /(sum(is.na(loc_avg))+sum(!is.na(loc_avg))), 
+                                                       defined_rate=sum(!is.na(loc_avg)) /(sum(is.na(loc_avg))+sum(!is.na(loc_avg))), 
                                                        Bias = mean(error, na.rm=T)^2, SD =sd(loc_avg, na.rm = TRUE), 
                                                        RMSE = sqrt(Bias+var(loc_avg, na.rm = T)) )
 }
@@ -268,7 +292,7 @@ summary<-SummariseError(results_k5)
 summary
 # Metrics as the rate of true value
 MetricRate<-function(summary_data,true_value=2){
- summary_data %>% summarise(bandwidth,Bias, SD,RMSE,defined_rate_ptc, Bias_rate = Bias/true_value, SD_rate = SD/true_value, RMSE_rate=RMSE/true_value) 
+ summary_data %>% summarise(bandwidth,Bias, SD,RMSE,defined_rate, Bias_rate = Bias/true_value, SD_rate = SD/true_value, RMSE_rate=RMSE/true_value) 
 }
 
 MetricRate(summary)
@@ -279,7 +303,7 @@ ShowMetricRate<-function(data){
     geom_line(aes(y=Bias_rate, color="Bias rate"), size=1.5)+
     geom_line(aes(y=SD_rate, color="SD rate"), size=1.5)+
     geom_line(aes(y=RMSE_rate, color="RMSE rate"), size=1.3)+
-    geom_line(aes(y=defined_rate_ptc, color="Defined rate"), size=1.1)+
+    geom_line(aes(y=defined_rate, color="Defined rate"), size=1.1)+
     scale_colour_manual("", 
                       breaks = c("Bias rate", "SD rate", "RMSE rate","Defined rate"),
                       values = c("blue", "green", "red", "black"))+
@@ -287,12 +311,14 @@ ShowMetricRate<-function(data){
     scale_y_continuous(labels = scales::percent)
 }
 
-MetricRate(summary) %>%  ShowMetricRate()
+k5<-MetricRate(summary) %>%  ShowMetricRate()+labs(subtitle = "k=5")
+k5
 ```
 
 
-We can see that 
 
+
+### k=8
 
 ```{r k=8}
 results_k8<-data.frame()
@@ -307,7 +333,8 @@ SummariseError(results_k8)
 SummariseError(results_k8) %>% MetricRate()
 
 # Visualize
-SummariseError(results_k8) %>% MetricRate() %>% ShowMetricRate()
+k8<-SummariseError(results_k8) %>% MetricRate() %>% ShowMetricRate()+labs(subtitle = "k=8")
+k8
 ```
 
 
@@ -332,8 +359,8 @@ SummariseError(results_k5_n10000)
 SummariseError(results_k5_n10000) %>% MetricRate()
 
 # Visualize
-SummariseError(results_k5_n10000) %>% MetricRate() %>% ShowMetricRate()
-
+k5_10k<-SummariseError(results_k5_n10000) %>% MetricRate() %>% ShowMetricRate()
+k5_10k
 ```
 
 
@@ -342,7 +369,7 @@ SummariseError(results_k5_n10000) %>% MetricRate() %>% ShowMetricRate()
 results_k8_n10000 <-data.frame()
 n<-1000
 for(i in 1:n){
-  results_k8_n10000<- rbind(results_k8_n10000, SimulateModel2(n=10000))
+  results_k8_n10000<- rbind(results_k8_n10000, SimulateModel2(n=10000,k=8))
   
 }
 #results_k8_n10000 <- map_df(seq(1000), SimulateModel2,k=8, n=10000,h=seq(1,4,0.5))
@@ -354,8 +381,8 @@ SummariseError(results_k8_n10000)
 SummariseError(results_k8_n10000) %>% MetricRate()
 
 # Visualize
-SummariseError(results_k8_n10000) %>% MetricRate() %>% ShowMetricRate()
-
+k8_10k<-SummariseError(results_k8_n10000) %>% MetricRate() %>% ShowMetricRate()
+k8_10k
 
 
 ```
@@ -364,8 +391,76 @@ SummariseError(results_k8_n10000) %>% MetricRate() %>% ShowMetricRate()
 ## D)
 Discuss the results.
 
+```{r, out.width="100%", fig.width=15, fig.height=7}
+library(ggpubr)
+ggarrange(k5, k8, nrow=1)
+```
+
+The above charts show the metrics rate of the true value and the rate when the estimator was defined for n=1000 sample size, k=5 and k=8 dimensions respectively. For k=5 the defined rate is steeply increasing with higher bandwidth and eventually (at 4) it is reaching ~95%. The bias is relatively small but increasing while the variance is much higher (~50%) but decreasing with higher bandwidth and defined rate.
+
+On the other hand, with k=8 dimensions the defined rate remains low by reaching only ~5% at bandwidth=3 and ~30% at bandwidth=4. Thus measures are less robust and pretty unreliable for bandwidth below 3. At the highest defined rate on the given interval the bias is similar to the k=5 value but the variance is much higher. Actually, we cannot draw lot of conclusion from the k=8 case because of the low defined rate, every single time the simulation will be different and result different bias and variance measures. 
+
+```{r, fig.width=15, fig.height=7}
+ggarrange(k5_10k, k8_10k, nrow=1)
+```
+
+In the case if 10000 sample size teh defined rete is much higher for both cases .
 
 # Problem 3
 
 ## A)
+Expanding the square:
+$$ E[(Y - \beta_0 )^2] = E[ Y^2 - 2Y\beta_0 + \beta^2]  $$
+$$ min \beta_0 : E[ Y^2 - 2Y\beta_0 + \beta^2] $$
+
+Derive respect to $\beta_0$ and set equal to 0 to solve the minimization problem.
+
+$$ E[ -2Y + 2\beta_0] = 0 $$
+$$  E[\beta_0 - Y] = 0$$
+$\beta_0$ is constant so we can remove the expected value of it:
+$$ \beta_0^* - E[Y] =0 $$
+$$ \beta^*_0 = E[Y]  $$
+
+
+## B)
+
+The OLS minimize the sum of squared residuals:
+
+
+$$ min \beta_0 : \sum_{i=1}^n   (Y_i -\hat \beta_0 )^2 $$ 
+
+Derive it respect to $\hat \beta_0$ and set it equal to 0. The derivative of the sum is the sum of derivatives:
+
+
+$$\sum_{i=1}^n 2 * (Y_i - \hat \beta_0)*(-1) = 0    $$
+
+$$ -2 * \sum_{i=1}^n (Y_i - \hat \beta_0) = 0    $$
+
+$$ \sum_{i=1}^n Y_i - \sum_{i=1}^n  \hat \beta_0  = 0    $$
+$\hat \beta_0$ is constant so the sum can be rewrited by $n*\hat \beta_0$:
+
+$$ \sum_{i=1}^n Y_i - n *  \hat \beta_0  = 0    $$
+$$ \sum_{i=1}^n Y_i = n *  \hat \beta_0    $$
+Expressing $\hat \beta_0$:
+
+
+$$ \hat \beta_0 =\frac{\sum_{i=1}^n Y_i }{n}  $$
+The sum of $Y_i$ divided by the number of observations is the mean.
+$$ \hat \beta_0 = \overline Y $$
+## C)
+
+Show that the expected value of $\hat \beta_0$ is the expected value of the true value. We can start from the formula derived in the previous part:
+
+$$ \hat \beta_0 =\frac{\sum_{i=1}^n Y_i }{n}  $$
+$$ \hat \beta_0 =\frac{\sum_{i=1}^n \beta_0 + \epsilon_i }{n}  $$
+$$ \hat \beta_0 =\frac{\sum_{i=1}^n \beta_0 +\sum_{i=1}^n \epsilon_i }{n}  $$
+Since $\epsilon$ ~ normal(0,1) i.i.d. thus $E(\epsilon) = 0$
+$$ \hat \beta_0 =\frac{\sum_{i=1}^n \beta_0}{n} $$
+And 
+
+$$ \hat \beta_0 = E(\beta_0)$$
+
+
+
+
 
