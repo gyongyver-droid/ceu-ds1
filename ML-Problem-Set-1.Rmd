@@ -361,7 +361,7 @@ SummariseError(results_k5_n10000)
 SummariseError(results_k5_n10000) %>% MetricRate()
 
 # Visualize
-k5_10k<-SummariseError(results_k5_n10000) %>% MetricRate() %>% ShowMetricRate()
+k5_10k<-SummariseError(results_k5_n10000) %>% MetricRate() %>% ShowMetricRate()+ labs(subtitle = "k=5")
 k5_10k
 ```
 
@@ -383,7 +383,7 @@ SummariseError(results_k8_n10000)
 SummariseError(results_k8_n10000) %>% MetricRate()
 
 # Visualize
-k8_10k<-SummariseError(results_k8_n10000) %>% MetricRate() %>% ShowMetricRate()
+k8_10k<-SummariseError(results_k8_n10000) %>% MetricRate() %>% ShowMetricRate() + labs(subtitle = "k=8")
 k8_10k
 
 
@@ -455,6 +455,8 @@ Expressing $\hat \beta_0$:
 $$ \hat \beta_0 =\frac{\sum_{i=1}^n Y_i }{n}  $$
 The sum of $Y_i$ divided by the number of observations is the mean.
 $$ \hat \beta_0 = \overline Y $$
+
+
 ## C)
 
 Show that the expected value of $\hat \beta_0$ is the expected value of the true value. We can start from the formula derived in the previous part:
