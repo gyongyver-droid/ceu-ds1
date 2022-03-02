@@ -465,8 +465,10 @@ $$ \hat \beta_0 =\frac{\sum_{i=1}^n Y_i }{n}  $$
 $$ \hat \beta_0 =\frac{\sum_{i=1}^n \beta_0 + \epsilon_i }{n}  $$
 $$ \hat \beta_0 =\frac{\sum_{i=1}^n \beta_0 +\sum_{i=1}^n \epsilon_i }{n}  $$
 Since $\epsilon$ ~ normal(0,1) i.i.d. thus $E(\epsilon) = 0$
+
+
 $$ \hat \beta_0 =\frac{\sum_{i=1}^n \beta_0}{n} $$
-And 
+And
 
 $$ \hat \beta_0 = E(\beta_0)$$
 
