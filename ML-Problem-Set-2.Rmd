@@ -1,0 +1,48 @@
+---
+title: "ML-Problem-Set-2"
+author: "Gyongyver Kamenar (2103380)"
+date: "3/7/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r LIbraries}
+
+```
+
+
+# Problem 1
+
+## A)
+Show that the solution to this problem is given by $\hat \beta^{ridge}_0 = \sum_{i=1}^n Y_i / (n + \lambda)$. Compare this to the OLS estimator.
+
+To minimize the expression we have to take the derivative and set it equal to 0. 
+
+$$ \sum_{i=1}^n 2 * (Y_i -  b)*(-1) + 2 \lambda b = 0   $$
+Transform to
+$$ -2 \sum_{i=1}^n  (Y_i -  b)+ 2 \lambda b = 0   $$
+Divide by 2
+$$ - \sum_{i=1}^n  (Y_i -  b)+  \lambda b = 0   $$
+
+Divide the summa into 2 parts. Only the Y part contains $i$ and the $b$ is taken n times.
+
+$$ -[ \sum_{i=1}^n  (Y_i ) -  nb ]+ \lambda b = 0   $$
+
+Reorganize the sides:
+$$ nb + \lambda b = \sum_{i=1}^n  (Y_i )   $$
+$$ (n + \lambda) b = \sum_{i=1}^n  (Y_i )   $$
+Divide by $n+\lambda$
+
+$$ (n + \lambda) b = \sum_{i=1}^n  (Y_i )   $$
+$$b = \sum_{i=1}^n  (Y_i ) / (n + \lambda)  $$
+Which is the solution of the problem:
+$$\hat \beta^{ridge}_0 = \sum_{i=1}^n  (Y_i ) / (n + \lambda)  $$
+
+Compating this to the OLS:
+$$\hat \beta^{OLS}_0 = \overline Y  = \sum_{i=1}^n  (Y_i ) / n $$
+
+So based on the two above formulas, we can see that $\hat \beta^{ridge}_0$ has $+\lambda$ in the denominator.  We know that $\lambda = 0$ in the Ridge regression so the $\hat \beta^{ridge}_0$ coefficient will be smaller than the OLS coefficient. 
+
