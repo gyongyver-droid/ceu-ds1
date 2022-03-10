@@ -10,7 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r LIbraries}
-
+library(glmnet)
+library(ggplot2)
 ```
 
 
@@ -44,5 +45,50 @@ $$\hat \beta^{ridge}_0 = \sum_{i=1}^n  (Y_i ) / (n + \lambda)  $$
 Compating this to the OLS:
 $$\hat \beta^{OLS}_0 = \overline Y  = \sum_{i=1}^n  (Y_i ) / n $$
 
-So based on the two above formulas, we can see that $\hat \beta^{ridge}_0$ has $+\lambda$ in the denominator.  We know that $\lambda = 0$ in the Ridge regression so the $\hat \beta^{ridge}_0$ coefficient will be smaller than the OLS coefficient. 
+So based on the two above formulas, we can see that $\hat \beta^{ridge}_0$ has $+\lambda$ in the denominator.  We know that $\lambda = 0$ in the Ridge regression so the $\hat \beta^{ridge}_0$ coefficient will be smaller than the OLS coefficient. The higher the $\lambda$ (penalty term) the higher the denominator so the ridge coefficient will be smaller. So we can see that $\lambda$ is really a penalty / shrinkage parameter.
+
+
+## b)
+
+
+```{r}
+
+simulate_ridge<-function(n=10,sd=2){
+  n=n
+  e <- rnorm(n=n,mean=0,sd=sd)
+  beta<-matrix(1,nrow = n,ncol = 1)
+  y <- beta + e 
+
+  lambda <-seq(0,20,0.1)
+  beta_hat <-sum(y)/(n+lambda)
+  data.frame(lambda,beta_hat)
+}
+
+simulate_ridge()
+
+
+
+ggplot(simulate_ridge())+
+  geom_line(aes(x=lambda,y=beta_hat))+
+  labs(title = "Estimated Beta of Ridge regression with respect to lambda",y="Beta hat", x="Lambda")
+
+```
+
+
+## C)
+
+
+```{r}
+library(purrr)
+map_df(seq(1,100,1), ~simulate_ridge(n=10))
+
+
+```
+
+
+
+
+
+
+
 
