@@ -51,7 +51,7 @@ So based on the two above formulas, we can see that $\hat \beta^{ridge}_0$ has $
 ## b)
 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 
 simulate_ridge<-function(n=10,sd=2){
   n=n
@@ -61,7 +61,7 @@ simulate_ridge<-function(n=10,sd=2){
 
   lambda <-seq(0,20,0.1)
   beta_hat <-sum(y)/(n+lambda)
-  data.frame(lambda,beta_hat)
+  data.frame(lambda,beta_hat, beta=1,y_hat=beta_hat+e)
 }
 
 simulate_ridge()
@@ -78,15 +78,33 @@ ggplot(simulate_ridge())+
 ## C)
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=TRUE}
 library(purrr)
-map_df(seq(1,100,1), ~simulate_ridge(n=10))
+df_1 <- map_df(seq(1,1000,1), ~{
+  results = simulate_ridge(n=10)
+  tibble(
+    lambda = results$lambda,
+    beta_hat = results$beta_hat,
+    error = 1 - results$beta_hat
+  )
+  
+  
+}) %>% group_by(lambda) %>% summarise(bias=mean(error)^2, var=var(beta_hat), mse=bias+var)
+
 
 
 ```
 
 
 
+## D)
+
+```{r}
+ggplot(df_1, aes(x=lambda))+
+  geom_line(aes(y=bias),color="blue")+
+  geom_line(aes(y=var), color="green")+
+  geom_line(aes(y=mse), color="red")
+```
 
 
 
