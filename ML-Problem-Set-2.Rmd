@@ -21,6 +21,7 @@ library(ggplot2)
 library(purrr)
 library(tidyverse)
 library(kableExtra)
+library(ggforce)
 # My theme
 devtools::source_url('https://raw.githubusercontent.com/gyongyver-droid/ceu-data-analysis/master/Assignment1/theme_gyongyver.R')
 theme_set(theme_gyongyver())
@@ -135,7 +136,7 @@ We can see, that as lambda is increasing, the bias is also increasing and the va
 $$ max_{u_1,u_2}\; Var(u_1X+u_2Y) \;\;\;  s.t.\;\; u_1^2 +u_2^2 = 1    $$
 
 and suppose that 
-$$Var(X) > Var(Y)  \;\;\; and \;\;\; Cov(X,Y) = E(XY) = 0 $$
+$$Var(X) > Var(Y)  \;\;\; and \;\;\; Cov(X,Y) = E(XY) = 0 .$$
 
 We can expand the variance formula:
 
@@ -149,11 +150,86 @@ From this, it is trivial to see that $u_1^2 Var(X)+u_2^2 Var(Y)$ will be maximiz
 The first principle component vector is $(u_1,u_2) = (1,0)$.
 
 
+### Illustration
+
+```{r Illustration}
+set.seed(20220307)
+x<-rnorm(1000,mean=0,sd=2)
+set.seed(43293)
+y<-rnorm(1000,mean=0,sd=0.5)
+# Covariance is almost zero
+cov(x,y)
+
+circles <- data.frame(
+  x0 = 0,
+  y0 = 0,
+  r = 1
+)
+
+# Behold the some circles
+
+data.frame(x,y) %>% ggplot()+
+  geom_point(aes(x=x,y=y), alpha=0.7)+
+  geom_circle(aes(x0 = x0, y0 = y0, r = r), data = circles, color="red", size=1)+
+  geom_abline(intercept = 0,slope = c(0,1,99999999), color="blue", size=1)+
+  scale_x_continuous(limits = c(-6,6), breaks = seq(-6,6,2))+
+  scale_y_continuous(limits = c(-6,6), breaks = seq(-6,6,2))+
+  labs(title = "Illustration",x="X",y="Y")
+  
+```
+
+
+
 ## B)
+
+The problem:
+
+$$ max_{u_1,u_2}\; Var(u_1X+u_2Y) \;\;\;  s.t.\;\; u_1^2 +u_2^2 = 1 \;\; and \;\; Var(X)=Var(Y)=1 \;\; and \;\; Cov(X,Y)=E(XY)=0 \; .$$
+
+We can expand the vaiance formula as before and neglect the covatiance term becasue it is zero:
+
+$$ Var(u_1X+u_2Y)  = u_1^2 Var(X)+u_2^2 Var(Y)+ 2u_1u_2Cov(X,Y)  =  u_1^2 Var(X)+u_2^2 Var(Y) \;\;.$$
+
+We can substitute 1 instead of $Var(X)$ and $Var(Y)$ :
+
+
+$$  u_1^2 Var(X)+u_2^2 Var(Y) = u_1^2 * 1 +u_2^2* 1=u_1^2 + u_2^2 $$
+
+
+So the maximization problem is:
+
+$$max_{u_1,u_2}\; ( u_1^2 + u_2^2 ) \;\;\;\; s.t. \;\;\;  u_1^2 + u_2^2 =1 \; .$$ 
+
+
+So regardless of the $(u_1,u_2)$ values of the unit vector, the expression will be maximized and its value will be 1  because of the $(u_1^2 + u_2^2 =1)$ condition.  Intuitively, becasue of the equal variance, the X,Y points will form a circle around their mean, and in each direction of a unit vector, the variance will be the same. See the illustration below:
+
+
+```{r}
+set.seed(20220307)
+x<-rnorm(1000,mean=0,sd=1)
+set.seed(43293)
+y<-rnorm(1000,mean=0,sd=1)
+# Covariance is almost zero
+cov(x,y)
+circles <- data.frame(x0 = 0,y0 = 0,r = 1)
+
+# Plot
+data.frame(x,y) %>% ggplot()+
+  geom_point(aes(x=x,y=y), alpha=0.7)+
+  geom_circle(aes(x0 = x0, y0 = y0, r = r), data = circles, color="red", size=1.3)+
+  geom_abline(intercept = 0,slope = c(0,1,99999999), color="blue", size=1, linetype="dashed")+
+  scale_x_continuous(limits = c(-6,6), breaks = seq(-6,6,2))+
+  scale_y_continuous(limits = c(-6,6), breaks = seq(-6,6,2))+
+  labs(title = "Illustration",x="X",y="Y")
+  
+```
 
 
 
 # Problem 3
+
+## A)
+
 
 
 
