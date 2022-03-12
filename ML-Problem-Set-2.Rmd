@@ -65,7 +65,7 @@ So based on the two above formulas, we can see that $\hat \beta^{ridge}_0$ has $
 
 
 ```{r message=FALSE, warning=FALSE, paged.print=TRUE}
-
+set.seed(111111)
 simulate_ridge<-function(n=10,sd=2){
   n=n
   e <- rnorm(n=n,mean=0,sd=sd)
@@ -229,6 +229,32 @@ data.frame(x,y) %>% ggplot()+
 # Problem 3
 
 ## A)
+Solution: iv) Steadily decrease
+
+For s=0 all $\beta_j=0$ so in this case the training error will be its maximum, becasue there are basically no explanatory variables just a constant $\beta_0$ which will be the mean. Then, for each increased $s$ the $\beta_j$ coefficients will increase and explain more and more (fit better and better on the data), so the RSS will be lower and lower. Eventually, with high enough $s$ the $\beta_j$ coefficients will reach the OLS estimates and in this case the RSS will be lower then in any case before. **So the training RSS will steadily decrease.**
+
+
+## B)
+Solution: ii) Decrease initially, and then eventually start increasing in a U shape.
+
+Initially, similarly to the previous case, at $s=0$ there will be no explanatory coefficients so the RSS will be really high. Then with higher s, the $\beta_j$ coefficients will increase, the model will better fit the data so the RSS will decrease. However, after a certain point we will see the difference on training and test RSS. The model will better and better fit the training data, but it will result overfitting. The model will not fit the test data as well as the test data. SO eventually the test RSS will start to increase. **Overall, this will result a U shaped RSS curve respect to $s$ value.** 
+
+## C)
+Solution: iii) Steadily increase
+
+Initially, for $s=0$ there will be no $\beta_j$ coefficients so the model's prediction will be a constant, which has no variance. With higher and higher $s$ the $\beta_j$ coefficient are increasing, more and more coefficients will we included in the model inducing more and more variance in the estimation. Eventually, the variance will be around the variance of the training data $\hat y$. **So the variance will steadily increase.**
+
+## D )
+Solution: iv) Steadily decreasing
+
+Whan $s=0$ the bias will be the highest, because with no explanatory variance the model will underfit the data. Increasing the $s$ value, the $\beta_j$ coefficients will also increase and more coefficients will be included, resulting a better fit and lower bias. Eventually, when s is high enough we can reach the OLS estimation, of which the estimates are unbiased. **SO overall, the bias will steadily decrease.**
+
+## E)
+SOlution: v) Remain constant
+
+By definition, irreducible error is that we cannot remove or influence by the model because it is causes by outside factors. So for a given data, the irreducible error will remain the same, regardless of the model parameters. **So the irreducible error will remain constant**.
+
+
 
 
 
