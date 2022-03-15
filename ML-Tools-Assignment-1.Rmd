@@ -1,0 +1,137 @@
+---
+title: "ML-Tools-Assignment-1"
+author: "Gyongyver Kamenar (2103380)"
+date: "3/14/2022"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    df_print: paged
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r Libraries}
+library(ranger)
+library(tidyverse)
+library(caret)
+```
+
+
+# Problem 1
+
+
+```{r}
+
+
+caravan_data <- as_tibble(ISLR::Caravan)
+
+set.seed(20220310)
+caravan_sample <- slice_sample(caravan_data, prop = 0.2)
+n_obs <- nrow(caravan_sample)
+test_share <- 0.2
+
+test_indices <- sample(seq(n_obs), floor(test_share * n_obs))
+caravan_test <- slice(caravan_sample, test_indices)
+caravan_train <- slice(caravan_sample, -test_indices)
+
+str(caravan_data)
+```
+
+
+## A)
+
+With what certainty we can predict, that the caravan will purchase insurance. 100% certainty means that we predict exactly tha actual case, 0% certainty means that we predict the opposite (since it binary) in each cases. We can also add a confidence interval.
+
+## B)
+
+```{r Logistic regression}
+
+set.seed(132456)
+
+variables <- colnames(caravan_data[,1:85])
+
+logit_model <- train(
+    form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
+    method    = "glm",
+    data      = caravan_train,
+    family    = binomial
+  )
+
+logit_model$results # Accurary 0.8998
+logit_model$trainingData$.outcome
+
+confusionMatrix(logit_model$trainingData$.outcome,caravan_train$Purchase)
+
+# Test evaluation
+
+confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase)
+
+# Accuracy 0.931
+
+```
+
+
+
+## D)
+
+The more serious mistake is, when we think/predict that a customer will purchase insurance but actually she/he does not. Because in this case, the insurance company will lose a lot of money they expected to have. 
+
+## E)
+
+```{r Factors}
+
+summary(caravan_data)
+
+caravan_data <-caravan_data %>% mutate_all(
+  as.factor
+)
+
+set.seed(20220310)
+caravan_sample <- slice_sample(caravan_data, prop = 0.2)
+n_obs <- nrow(caravan_sample)
+test_share <- 0.2
+
+test_indices <- sample(seq(n_obs), floor(test_share * n_obs))
+caravan_test <- slice(caravan_sample, test_indices)
+caravan_train <- slice(caravan_sample, -test_indices)
+
+# rerun logit model with factors
+logit_model_factor <- train(
+    form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
+    method    = "glm",
+    data      = caravan_train,
+    family    = binomial
+  )
+
+logit_model_factor$results # Accurary 0.8998
+logit_model_factor$trainingData$.outcome
+
+confusionMatrix(logit_model$trainingData$.outcome,caravan_train$Purchase)
+
+# Test evaluation
+
+confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase)
+
+# Accuracy 0.931
+
+
+```
+
+
+
+
+
