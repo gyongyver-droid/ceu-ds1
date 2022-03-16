@@ -64,6 +64,7 @@ set.seed(132456)
 
 variables <- colnames(caravan_data[,1:85])
 
+form <- formula(paste0("Purchase ~", paste0(variables, collapse = " + ")))
 logit_model <- train(
     form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
     method    = "glm",
@@ -80,7 +81,7 @@ confusionMatrix(logit_model$trainingData$.outcome,caravan_train$Purchase)
 
 confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase)
 
-# Accuracy 0.931
+# Test Accuracy 0.931
 
 ```
 
@@ -117,21 +118,71 @@ logit_model_factor <- train(
     family    = binomial
   )
 
-logit_model_factor$results # Accurary 0.8998
+logit_model_factor$results # Accurary 0.66
 logit_model_factor$trainingData$.outcome
 
-confusionMatrix(logit_model$trainingData$.outcome,caravan_train$Purchase)
+confusionMatrix(logit_model_factor$trainingData$.outcome,caravan_train$Purchase)
 
 # Test evaluation
 
-confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase)
+confusionMatrix(predict(logit_model_factor,caravan_test),caravan_test$Purchase)
 
-# Accuracy 0.931
+# Test Accuracy 0.85
 
 
 ```
 
+## F)
 
 
+```{r tree}
+set.seed(54321)
+cart <- train(form=form,
+  data=caravan_train,
+  method = "rpart",
+  tuneGrid= expand.grid(cp = 0.01),
+  na.action = na.pass)
+
+print(cart)
+cart$metric
+
+confusionMatrix(predict(cart,caravan_test),caravan_test$Purchase)
+```
+
+
+## G)
+
+
+```{r random forest model}
+
+tune_grid <- expand.grid(
+  .mtry = 5, # c(5, 6, 7),
+  .splitrule = "gini",
+  .min.node.size = 15 # c(10, 15)
+)
+# By default ranger understands that the outcome is binary, 
+#   thus needs to use 'gini index' to decide split rule
+# getModelInfo("ranger")
+set.seed(132456)
+rf_model_p <- train(
+   form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
+  method = "ranger",
+  data = caravan_train,
+  tuneGrid = tune_grid,
+  metric="Accuracy"
+)
+rf_model_p$results %>% kable() # Accuracy 0.94
+rf_model_p
+
+confusionMatrix(predict(rf_model_p,caravan_train),caravan_train$Purchase)
+
+
+# Test evaluation
+confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)
+
+```
+
+
+## H)
 
 
