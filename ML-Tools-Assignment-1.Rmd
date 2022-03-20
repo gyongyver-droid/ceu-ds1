@@ -2,16 +2,8 @@
 title: "ML-Tools-Assignment-1"
 author: "Gyongyver Kamenar (2103380)"
 date: "3/14/2022"
-output:
-  prettydoc::html_pretty:
-    theme: architect
-    df_print: paged
+output: pdf_document
 ---
-
-<style>
-body {
-text-align: justify}
-</style>
 
 ---
 
@@ -24,18 +16,18 @@ knitr::opts_chunk$set(
 ```
 
 
-```{r Libraries}
+```{r Libraries, message=FALSE, warning=FALSE}
 library(ranger)
 library(tidyverse)
 library(caret)
+library(kableExtra)
 ```
 
 
 # Problem 1
 
 
-```{r}
-
+```{r Get the data}
 
 caravan_data <- as_tibble(ISLR::Caravan)
 
@@ -48,15 +40,24 @@ test_indices <- sample(seq(n_obs), floor(test_share * n_obs))
 caravan_test <- slice(caravan_sample, test_indices)
 caravan_train <- slice(caravan_sample, -test_indices)
 
-str(caravan_data)
 ```
 
 
 ## A)
+**What would be a good evaluation metric for this problem? Think about it from the perspective of the business.**
 
-With what certainty we can predict, that the caravan will purchase insurance. 100% certainty means that we predict exactly tha actual case, 0% certainty means that we predict the opposite (since it binary) in each cases. We can also add a confidence interval.
+How accurately we can predict, that the caravan will purchase insurance. 100% accurately means that we predict exactly the actual case, 0% certainty means that we predict the opposite (since it binary) in each cases. Accuracy can be calculated by adding the number of correctly classified items and divide it by the total number of items. We can also add a confidence interval using the standard deviation of the accuracy measure.
 
-## B)
+## B) and C)
+
+```{r Average as benchmark}
+
+mean(as.numeric(caravan_train$Purchase)) %>% kable()
+caravan_train %>% group_by(Purchase) %>% count()
+
+```
+
+The average as the basic benchmark model, we can see that the average of the training data is `r mean(as.numeric(caravan_train$Purchase))` (the labels are 1 and 2).  This means, that if we predict 1 (No insurance) for all of them, we will mistake in just 5.9% of the cases. This really simple model already results `r sum(caravan_train$Purchase=="No")/nrow(caravan_train) * 100`% accuracy.
 
 ```{r Logistic regression}
 
@@ -65,26 +66,34 @@ set.seed(132456)
 variables <- colnames(caravan_data[,1:85])
 
 form <- formula(paste0("Purchase ~", paste0(variables, collapse = " + ")))
+
+ctrl <- trainControl(method = "cv", savePredictions = "final", returnResamp = "final")
+
 logit_model <- train(
-    form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
+    form = form,
     method    = "glm",
     data      = caravan_train,
-    family    = binomial
+    family    = binomial,
+    trControl = ctrl
   )
 
-logit_model$results # Accurary 0.8998
-logit_model$trainingData$.outcome
+logit_model$results %>% kable()# Accuracy 
+#logit_model$pred
+```
+I trained a logit model with all variables, and it has `r logit_model$results$Accuracy` accuracy, which is quite bad compared to the benchmark model. So let's see the further details of the model and the predictions. 
 
-confusionMatrix(logit_model$trainingData$.outcome,caravan_train$Purchase)
+```{r Evaluate}
+
+# Train evaluation
+confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table
 
 # Test evaluation
 
 confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase)
-
 # Test Accuracy 0.931
 
 ```
-
+On the train dataset, the logit model classified `r` 
 
 
 ## D)
@@ -172,7 +181,7 @@ rf_model_p <- train(
   metric="Accuracy"
 )
 rf_model_p$results %>% kable() # Accuracy 0.94
-rf_model_p
+
 
 confusionMatrix(predict(rf_model_p,caravan_train),caravan_train$Purchase)
 
@@ -184,5 +193,28 @@ confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)
 
 
 ## H)
+
+```{r Modelling on the full set}
+
+caravan_full_train <- anti_join(caravan_data,caravan_test)
+
+
+
+```
+
+
+## Problem 2 
+
+
+```{r Get the data 2, message=FALSE, warning=FALSE}
+
+real_estate <- read_csv('https://raw.githubusercontent.com/divenyijanos/ceu-ml/main/data/real_estate/real_estate.csv')
+
+
+```
+
+
+
+
 
 
