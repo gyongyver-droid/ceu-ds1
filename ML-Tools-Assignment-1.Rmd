@@ -44,16 +44,19 @@ caravan_train <- slice(caravan_sample, -test_indices)
 
 
 ## A)
-**What would be a good evaluation metric for this problem? Think about it from the perspective of the business.**
+*What would be a good evaluation metric for this problem? Think about it from the perspective of the business.*
 
 How accurately we can predict, that the caravan will purchase insurance. 100% accurately means that we predict exactly the actual case, 0% certainty means that we predict the opposite (since it binary) in each cases. Accuracy can be calculated by adding the number of correctly classified items and divide it by the total number of items. We can also add a confidence interval using the standard deviation of the accuracy measure.
 
 ## B) and C)
+*Let’s use the basic metric for classification problems: the accuracy (% of correctly classified examples). Train a simple logistic regression (using all of the available variables) and evaluate its performance on both the train and the test set. Does this model perform well? (Hint: You might want to evaluate a basic benchmark model first for comparison – e.g. predicting that no one will make a purchase.) *
+*Let’s say your accuracy is 95%. Do we know anything about the remaining 5%? Why did we mistake them? Are they people who bought and we thought they won’t? Or quite the opposite? Report a table about these mistakes (Hint: I would like to see the Confusion Matrix.)* 
+
 
 ```{r Average as benchmark}
 
 mean(as.numeric(caravan_train$Purchase)) %>% kable()
-caravan_train %>% group_by(Purchase) %>% count()
+caravan_train %>% group_by(Purchase) %>% count() %>% kable()
 
 ```
 
@@ -80,31 +83,41 @@ logit_model <- train(
 logit_model$results %>% kable()# Accuracy 
 #logit_model$pred
 ```
+
 I trained a logit model with all variables, and it has `r logit_model$results$Accuracy` accuracy, which is quite bad compared to the benchmark model. So let's see the further details of the model and the predictions. 
 
-```{r Evaluate}
+
+```{r Evaluate logit}
 
 # Train evaluation
-confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table
-
+cm_logit<-confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)
+cm_logit
 # Test evaluation
-
-confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase)
-# Test Accuracy 0.931
-
+cm_logit_test<-confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase) # Test Accuracy 0.931
+cm_logit_test
 ```
-On the train dataset, the logit model classified `r` 
 
+On the train dataset, the logit model classified `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[1]+confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[4]  ` items correctly out of the `r nrow(caravan_train)`. The logit predicted `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[2]` 'Yes' while actually these do not have insurence (FN) and predicted `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[3]` 'No' while actually these have/pay insurance (FP). We can see, that the number of false positive classification is much higher than the number of false negative. (Positive class is 'No')
+The sensitivity of the prediction is `r cm_logit$byClass[1]` while the specificity is `r cm_logit$byClass[2]`.
+This means, that the model classified `r cm_logit$table[4]/(cm_logit$table[3]+cm_logit$table[4]) * 100`% of the negative cases correctly. 
+The positive predictive value is `r cm_logit$byClass[3]` which is not so bad, however, the negative predictive value is `r cm_logit$byClass[4]` which is really low. It basically means, that the model's negative classifications is in only  `r cm_logit$byClass[4]*100`% true. 
+ 
+ 
+On the test dataset, the accuracy is `r cm_logit_test$overall[1]`. The FN rate is `r cm_logit_test$table[2]/nrow(caravan_test)` while the FP rate is `rcm_logit_test$table[3]/nrow(caravan_test)`. The sensitivity is `r cm_logit_test$byClass[1]` while the specificity is `r cm_logit_test$byClass[2]`. Just like on the train set, the false positive rate is much higher then the false negative rate. 
 
 ## D)
+*What do you think is a more serious mistake in this situation?*
 
-The more serious mistake is, when we think/predict that a customer will purchase insurance but actually she/he does not. Because in this case, the insurance company will lose a lot of money they expected to have. 
+
+The more serious mistake is, when we think/predict that a customer will purchase insurance but actually she/he does not (false negative case) . Because in this case, the insurance company will lose a lot of money they expected to have. On the other hand, if the model gives no insurance classification but actually the customer purchased an insurance, it is additional money they did not expect, which is overall not so bad until it's rate is not too high, so the company can handle these cases (e.g. enough employees) .
 
 ## E)
+*You might have noticed (if you checked your data first) that most of your features are categorical variables coded as numbers. Turn your features into factors and rerun your logistic regression. Did the prediction performance improve?*
 
-```{r Factors}
 
-summary(caravan_data)
+```{r Logit with factors}
+
+#summary(caravan_data)
 
 caravan_data <-caravan_data %>% mutate_all(
   as.factor
@@ -124,43 +137,51 @@ logit_model_factor <- train(
     form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
     method    = "glm",
     data      = caravan_train,
-    family    = binomial
+    family    = binomial,
+     trControl = ctrl
   )
 
-logit_model_factor$results # Accurary 0.66
-logit_model_factor$trainingData$.outcome
+logit_model_factor$results # Accurary 0.78
 
-confusionMatrix(logit_model_factor$trainingData$.outcome,caravan_train$Purchase)
+# Train evaluation
+confusionMatrix(logit_model_factor$pred$pred,logit_model_factor$pred$obs)
 
 # Test evaluation
 
-confusionMatrix(predict(logit_model_factor,caravan_test),caravan_test$Purchase)
-
-# Test Accuracy 0.85
+confusionMatrix(predict(logit_model_factor,caravan_test),caravan_test$Purchase)# Test Accuracy 0.85
 
 
 ```
 
+The performance of the model did not improve as we can see from the reports above. The train and test accuracies are both dramatically decreased. Probably, it due to the small sample size and the not too flexible model. It's possible, that there are no observation for each factor for each variable in the train dataset. 
+
 ## F)
+*Let’s try a nonlinear model: build a simple tree model and evaluate its performance.*
 
 
 ```{r tree}
-set.seed(54321)
+set.seed(20220310)
 cart <- train(form=form,
   data=caravan_train,
   method = "rpart",
   tuneGrid= expand.grid(cp = 0.01),
-  na.action = na.pass)
+  na.action = na.pass,
+  trControl = ctrl)
 
-print(cart)
-cart$metric
 
-confusionMatrix(predict(cart,caravan_test),caravan_test$Purchase)
+cart$results %>% kable()
+cart$results$Accuracy
+# tree train performance
+cm_tree <- confusionMatrix(cart$pred$pred,cart$pred$obs)
+cm_tree
+# tree test performance
+cm_tree_test <- confusionMatrix(predict(cart,caravan_test),caravan_test$Purchase)
+cm_tree_test
 ```
-
+The tree model reached `r cart$results$Accuracy` accuracy on the training set and `r cm_tree_test$overall[1]` on the test set. These are the best values so far, however, the accuracy is close to the simple benchmark model. We can also notice, that the false negative rate decreased while the false positive rate increased compared to the logit model, and we know that false negative is the worse mistake.
 
 ## G)
-
+*Run a more flexible model (like random forest or GBM). Did it help?*
 
 ```{r random forest model}
 
@@ -172,49 +193,147 @@ tune_grid <- expand.grid(
 # By default ranger understands that the outcome is binary, 
 #   thus needs to use 'gini index' to decide split rule
 # getModelInfo("ranger")
-set.seed(132456)
+set.seed(20220310)
 rf_model_p <- train(
    form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
   method = "ranger",
   data = caravan_train,
   tuneGrid = tune_grid,
-  metric="Accuracy"
+  metric="Accuracy",
+  trControl = ctrl
 )
+# Results
 rf_model_p$results %>% kable() # Accuracy 0.94
 
+#Random forest train evaluation
+confusionMatrix(rf_model_p$pred$pred,rf_model_p$pred$obs)
 
-confusionMatrix(predict(rf_model_p,caravan_train),caravan_train$Purchase)
 
-
-# Test evaluation
+# Random forest Test evaluation
 confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)
 
 ```
-
+I run a random ofrest as a more flexible model, and it improved the performance. The accuracy value of the train and test set are the highest so far, and the false negative prediction rate is `r confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)$table[2]/nrow(caravan_test)` in each cases. 
 
 ## H)
+*Rerun two of your previous models (a flexible and a less flexible one) on the full train set. Ensure that your test result remains comparable by keeping that dataset intact. (Hint: use the anti_join() function as we did in class.) Interpret your results.* 
 
-```{r Modelling on the full set}
+
+```{r Treee Modelling on the full set, message=FALSE, warning=FALSE}
 
 caravan_full_train <- anti_join(caravan_data,caravan_test)
 
+set.seed(20220310)
+cart_full <- train(form=form,
+  data=caravan_full_train,
+  method = "rpart",
+  tuneGrid= expand.grid(cp = 0.01),
+  na.action = na.pass,
+  trControl = ctrl)
+
+
+cart_full$results %>% kable()
+cart_full$results$Accuracy
+# tree train performance
+cm_tree_full <- confusionMatrix(cart_full$pred$pred,cart_full$pred$obs)
+cm_tree_full
+# tree test performance
+cm_tree_test_full <- confusionMatrix(predict(cart_full,caravan_test),caravan_test$Purchase)
+cm_tree_test_full
 
 
 ```
+```{r Random forest on full set}
+
+set.seed(20220310)
+rf_model_full <- train(
+   form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
+  method = "ranger",
+  data = caravan_full_train,
+  tuneGrid = tune_grid,
+  metric="Accuracy",
+  trControl = ctrl
+)
+# Results
+rf_model_full$results %>% kable() # Accuracy 
+
+#Random forest train evaluation
+confusionMatrix(rf_model_full$pred$pred,rf_model_full$pred$obs)
+
+
+# Random forest Test evaluation
+confusionMatrix(predict(rf_model_full,caravan_test),caravan_test$Purchase)
+```
+
+The models trained on the full set did not classified any observations as negative (Yes).
 
 
 ## Problem 2 
 
+## A)
+*Think about an appropriate loss function you can use to evaluate your predictive models. What is the risk (from the business perspective) you would have to take by a wrong prediction?*
 
-```{r Get the data 2, message=FALSE, warning=FALSE}
+The root mean squared error (RMSE) would be an appropriate loss function to evaluate the models. It handles error in both direction equally. I think it's appropriate, becasue both over and underestimation is equally bad. If the model underestimates the price, the house will be sold quickly but on cheaper price. If the model overestimates the price, a house needs long time to be sold or it won't be sold at on on that price at all. 
+So it's like a trade off between time and money. 
+Using RMSE, we can tell the applicants that below the estimation the house will be sold quicker, above the estimation the house will be sold on higher price but needs longer time.
+
+## B)
+*Put aside 20% of your data for evaluation purposes (using your chosen loss function). Build a simple benchmark model and evaluate its performance on this hold-out set.*
+
+
+```{r Get real estate data, message=FALSE, warning=FALSE}
 
 real_estate <- read_csv('https://raw.githubusercontent.com/divenyijanos/ceu-ml/main/data/real_estate/real_estate.csv')
 
+set.seed(20220310)
+
+n_obs <- nrow(real_estate)
+test_share <- 0.2
+
+test_indices <- sample(seq(n_obs), floor(test_share * n_obs))
+real_estate_test <- slice(real_estate, test_indices)
+real_estate_train <- slice(real_estate, -test_indices)
+```
+I build a benchmark prediction model, which is a simple linear regression with the age of the house as explanatory variable. 
+
+```{r Benchmark model for real estate}
+
+benchmark <- lm(house_price_of_unit_area ~ house_age, data = real_estate_train)
+
+# RMSE train
+RMSE(benchmark$fitted.values,real_estate_train$house_price_of_unit_area) 
+# RMSE test
+RMSE(predict(benchmark,real_estate_test),real_estate_test$house_price_of_unit_area)
+```
+The RMSE on the train and test sets are `r RMSE(benchmark$fitted.values,real_estate_train$house_price_of_unit_area) ` and `r RMSE(predict(benchmark,real_estate_test),real_estate_test$house_price_of_unit_area) `. 
+
+## C)
+*Build a simple linear regression model and evaluate its performance. Would you launch your evaluator web app using this model?*
+
+```{r}
+vars <- names(real_estate)[2:7]
+formula <-paste0("house_price_of_unit_area~",paste( as.list(vars),collapse = '+',sep=''))
+
+reg1 <- lm(formula = formula, data=real_estate_train)
+# Evaluate train
+RMSE(reg1$fitted.values,real_estate_train$house_price_of_unit_area)
+# Evaluate test
+RMSE(predict(reg1,real_estate_test),real_estate_test$house_price_of_unit_area)
+
+```
+This model is much better than the benchmark (~ 30% lower RMSE) but I would still not use this as the model for my app, because  we can try to get better model.
+
+## D) 
+*Try to improve your model. Take multiple approaches (e.g. feature engineering, more flexible models, stacking, etc.) and document their successes.*
+
+The main feature of the regression is that it's linear, while in reality relationship between variables is often not linear.
+```{r}
 
 ```
 
 
-
+## E) 
+*Would you launch your web app now? What options you might have to further improve the prediction performance?*
 
 
 
