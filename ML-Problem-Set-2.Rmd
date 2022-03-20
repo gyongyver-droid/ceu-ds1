@@ -148,7 +148,9 @@ and we know that the covariance is 0, so the problem is the following:
 
 $$ max_{u_1,u_2}\; ( u_1^2 Var(X)+u_2^2 Var(Y) ) \;\;\;\;\;\;\; s.t. \;\; u_1^2 +u_2^2 = 1 \;\; and \;\; Var(X) > Var(Y)  \;\;\; and \;\;\; Cov(X,Y) = E(XY) = 0  $$
 
-From this, it is trivial to see that $u_1^2 Var(X)+u_2^2 Var(Y)$ will be maximized if $u_1^2=1 \; and \; u_2^2=0$ because of the $Var(X) > Var(Y)$ condition. Therefore, there is no need to actually derive optimization problem. 
+From this, it is trivial to see that $u_1^2 Var(X)+u_2^2 Var(Y)$ will be maximized if $u_1^2=1 \; and \; u_2^2=0$ because of the $Var(X) > Var(Y)$ condition.
+So, if we want to maximize $u_1^2 Var(X)+u_2^2 Var(Y)$ and we know that $Var(X) > Var(Y)$, we have to take the highest possible $u_1^2$. Based on the  $u_1^2 +u_2^2 = 1 $ condition, it's 1. Then, $u_2 = 0$ . 
+Therefore, there is no need to actually derive the optimization problem. 
 
 The first principle component vector is $(u_1,u_2) = (1,0)$.
 
@@ -174,7 +176,7 @@ circles <- data.frame(
 data.frame(x,y) %>% ggplot()+
   geom_point(aes(x=x,y=y), alpha=0.7)+
   geom_circle(aes(x0 = x0, y0 = y0, r = r), data = circles, color="red", size=1)+
-  geom_abline(intercept = 0,slope = c(0), color="blue", size=1)+
+  geom_abline(intercept = 0,slope = c(0), color="blue", size=1, linetype="dashed")+
   scale_x_continuous(limits = c(-6,6), breaks = seq(-6,6,2))+
   scale_y_continuous(limits = c(-6,6), breaks = seq(-6,6,2))+
   labs(title = "Illustration of random X, Y variables",subtitle = "Var(X) > Var(Y) and Cov(X,Y)=0" , x="X",y="Y")
@@ -204,7 +206,9 @@ So the maximization problem is:
 $$max_{u_1,u_2}\; ( u_1^2 + u_2^2 ) \;\;\;\; s.t. \;\;\;  u_1^2 + u_2^2 =1 \; .$$ 
 
 
-So regardless of the $(u_1,u_2)$ values of the unit vector, the expression will be maximized and its value will be 1  because of the $(u_1^2 + u_2^2 =1)$ condition.  Intuitively, becasue of the equal variance, the X,Y points will form a circle around their mean, and in each direction of a unit vector, the variance will be the same. See the illustration below:
+So regardless of the $(u_1,u_2)$ values of the unit vector, the expression will be maximized and its value will be 1  because of the $(u_1^2 + u_2^2 =1)$ condition.
+Intuitively, because of the equal variance, the X,Y points will form a circle around their mean, and in each direction of a unit vector, the variance will be the same. Again, there is no need to actually calculate the derivative, because the problem is straightforward.
+See the illustration below:
 
 
 ```{r}
