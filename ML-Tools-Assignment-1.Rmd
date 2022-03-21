@@ -21,6 +21,7 @@ library(ranger)
 library(tidyverse)
 library(caret)
 library(kableExtra)
+library(lubridate)
 ```
 
 
@@ -321,15 +322,56 @@ RMSE(reg1$fitted.values,real_estate_train$house_price_of_unit_area)
 RMSE(predict(reg1,real_estate_test),real_estate_test$house_price_of_unit_area)
 
 ```
-This model is much better than the benchmark (~ 30% lower RMSE) but I would still not use this as the model for my app, because  we can try to get better model.
+This model is much better than the benchmark (~ 30% lower RMSE) but I would still not use this as the model for my app, because  we can try to get better model. I see room for feature engineering, other functional forms and for more flexible models as well, which can improve the performance. 
 
 ## D) 
 *Try to improve your model. Take multiple approaches (e.g. feature engineering, more flexible models, stacking, etc.) and document their successes.*
 
-The main feature of the regression is that it's linear, while in reality relationship between variables is often not linear.
-```{r}
+The main feature of the regression is that it's linear, while in reality relationship between variables is often not linear. Also, we do not use the transaction date, latitude and logitude variables properly, so these can certainly improved.
+
+```{r feature enginnering}
+summary(reg1)
+
+# Lat and lon values
+lat <-25.105497
+lon <-121.597366
+
+lat<-25.011262
+lon<-121.445867
+
+range(real_estate$latitude)
+range(real_estate$longitude)
+unique(real_estate$date_correct)
+
+
+real_estate <- real_estate %>%  mutate(
+  lat_from_centre = latitude - lat,
+  lon_from_centre = longitude - lon,
+  date_correct = ymd(paste(floor(transaction_date), as.character(round(transaction_date %% 1 * 12+1 ),0),"01", sep="-"))
+)
+
+
+ggplot(real_estate,aes(x=house_age, y=house_price_of_unit_area))+
+  geom_point()+
+  geom_smooth()
 
 ```
+
+**Latitude and longitude**
+Banqiao District (Chinese: 板橋區; pinyin: Bǎnqiáo Qū) is a district and the seat of New Taipei City, Taiwan. It has the third-highest population density in Taiwan, with over 24,000 inhabitants per square kilometre (62,000/sq mi). Until the creation of New Taipei City, Banqiao (then transliterated as Banciao or Pan-ch'iao) was an incorporated county-administered city and the former seat of Taipei County.
+
+
+```{r modelling}
+
+reg2 <-lm(house_price_of_unit_area ~  ,data = real_estate_train)
+
+lasso_reg <-
+  
+  
+rf_realestate <-
+
+```
+
 
 
 ## E) 
