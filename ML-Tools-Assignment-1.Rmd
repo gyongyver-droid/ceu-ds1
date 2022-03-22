@@ -22,6 +22,7 @@ library(tidyverse)
 library(caret)
 library(kableExtra)
 library(lubridate)
+library(stargazer)
 ```
 
 
@@ -88,14 +89,23 @@ logit_model$results %>% kable()# Accuracy
 I trained a logit model with all variables, and it has `r logit_model$results$Accuracy` accuracy, which is quite bad compared to the benchmark model. So let's see the further details of the model and the predictions. 
 
 
-```{r Evaluate logit}
+```{r Evaluate logit,results='asis'}
+
+show_confmat_output<-function(cm, model_name="model"){
+  print(model_name %>% kable(col.names = ""))
+  pritn(cm$table %>% kable())
+  print(cm$overall %>% kable(col.names = model_name))
+  print(cm$byClass %>% kable(col.names = model_name))
+}
 
 # Train evaluation
 cm_logit<-confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)
-cm_logit
+show_confmat_output(cm_logit,"Logit model train")
+
 # Test evaluation
 cm_logit_test<-confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase) # Test Accuracy 0.931
-cm_logit_test
+
+show_confmat_output(cm_logit_test,"Logit model test")
 ```
 
 On the train dataset, the logit model classified `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[1]+confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[4]  ` items correctly out of the `r nrow(caravan_train)`. The logit predicted `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[2]` 'Yes' while actually these do not have insurence (FN) and predicted `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[3]` 'No' while actually these have/pay insurance (FP). We can see, that the number of false positive classification is much higher than the number of false negative. (Positive class is 'No')
@@ -109,14 +119,13 @@ On the test dataset, the accuracy is `r cm_logit_test$overall[1]`. The FN rate i
 ## D)
 *What do you think is a more serious mistake in this situation?*
 
-
 The more serious mistake is, when we think/predict that a customer will purchase insurance but actually she/he does not (false negative case) . Because in this case, the insurance company will lose a lot of money they expected to have. On the other hand, if the model gives no insurance classification but actually the customer purchased an insurance, it is additional money they did not expect, which is overall not so bad until it's rate is not too high, so the company can handle these cases (e.g. enough employees) .
 
 ## E)
 *You might have noticed (if you checked your data first) that most of your features are categorical variables coded as numbers. Turn your features into factors and rerun your logistic regression. Did the prediction performance improve?*
 
 
-```{r Logit with factors}
+```{r Logit with factors, results='asis'}
 
 #summary(caravan_data)
 
@@ -145,11 +154,11 @@ logit_model_factor <- train(
 logit_model_factor$results # Accurary 0.78
 
 # Train evaluation
-confusionMatrix(logit_model_factor$pred$pred,logit_model_factor$pred$obs)
+show_confmat_output(confusionMatrix(logit_model_factor$pred$pred,logit_model_factor$pred$obs), "Logit with factors - train")
 
 # Test evaluation
 
-confusionMatrix(predict(logit_model_factor,caravan_test),caravan_test$Purchase)# Test Accuracy 0.85
+show_confmat_output(confusionMatrix(predict(logit_model_factor,caravan_test),caravan_test$Purchase), "Logit with factors - test")# Test Accuracy 0.85
 
 
 ```
@@ -160,7 +169,7 @@ The performance of the model did not improve as we can see from the reports abov
 *Let’s try a nonlinear model: build a simple tree model and evaluate its performance.*
 
 
-```{r tree}
+```{r tree, results='asis'}
 set.seed(20220310)
 cart <- train(form=form,
   data=caravan_train,
@@ -174,17 +183,17 @@ cart$results %>% kable()
 cart$results$Accuracy
 # tree train performance
 cm_tree <- confusionMatrix(cart$pred$pred,cart$pred$obs)
-cm_tree
+show_confmat_output(cm_tree, "Simple tree - train")
 # tree test performance
 cm_tree_test <- confusionMatrix(predict(cart,caravan_test),caravan_test$Purchase)
-cm_tree_test
+show_confmat_output(cm_tree_test, "Simple tree - test")
 ```
 The tree model reached `r cart$results$Accuracy` accuracy on the training set and `r cm_tree_test$overall[1]` on the test set. These are the best values so far, however, the accuracy is close to the simple benchmark model. We can also notice, that the false negative rate decreased while the false positive rate increased compared to the logit model, and we know that false negative is the worse mistake.
 
 ## G)
 *Run a more flexible model (like random forest or GBM). Did it help?*
 
-```{r random forest model}
+```{r random forest model,results='asis'}
 
 tune_grid <- expand.grid(
   .mtry = 5, # c(5, 6, 7),
@@ -207,11 +216,11 @@ rf_model_p <- train(
 rf_model_p$results %>% kable() # Accuracy 0.94
 
 #Random forest train evaluation
-confusionMatrix(rf_model_p$pred$pred,rf_model_p$pred$obs)
+show_confmat_output(confusionMatrix(rf_model_p$pred$pred,rf_model_p$pred$obs),"Random forest - train")
 
 
 # Random forest Test evaluation
-confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)
+show_confmat_output(confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase),"Random forest - test")
 
 ```
 I run a random ofrest as a more flexible model, and it improved the performance. The accuracy value of the train and test set are the highest so far, and the false negative prediction rate is `r confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)$table[2]/nrow(caravan_test)` in each cases. 
@@ -220,7 +229,7 @@ I run a random ofrest as a more flexible model, and it improved the performance.
 *Rerun two of your previous models (a flexible and a less flexible one) on the full train set. Ensure that your test result remains comparable by keeping that dataset intact. (Hint: use the anti_join() function as we did in class.) Interpret your results.* 
 
 
-```{r Treee Modelling on the full set, message=FALSE, warning=FALSE}
+```{r Treee Modelling on the full set, message=FALSE, warning=FALSE,results='asis'}
 
 caravan_full_train <- anti_join(caravan_data,caravan_test)
 
@@ -237,14 +246,14 @@ cart_full$results %>% kable()
 cart_full$results$Accuracy
 # tree train performance
 cm_tree_full <- confusionMatrix(cart_full$pred$pred,cart_full$pred$obs)
-cm_tree_full
+show_confmat_output(cm_tree_full,"Full sample tree - train")
 # tree test performance
 cm_tree_test_full <- confusionMatrix(predict(cart_full,caravan_test),caravan_test$Purchase)
-cm_tree_test_full
+show_confmat_output(cm_tree_test_full,"Full sample tree - test")
 
 
 ```
-```{r Random forest on full set}
+```{r Random forest on full set,results='asis'}
 
 set.seed(20220310)
 rf_model_full <- train(
@@ -259,11 +268,11 @@ rf_model_full <- train(
 rf_model_full$results %>% kable() # Accuracy 
 
 #Random forest train evaluation
-confusionMatrix(rf_model_full$pred$pred,rf_model_full$pred$obs)
+show_confmat_output(confusionMatrix(rf_model_full$pred$pred,rf_model_full$pred$obs),"Full sample random forest -train")
 
 
 # Random forest Test evaluation
-confusionMatrix(predict(rf_model_full,caravan_test),caravan_test$Purchase)
+show_confmat_output(confusionMatrix(predict(rf_model_full,caravan_test),caravan_test$Purchase),"Full sample random forest - test")
 ```
 
 The models trained on the full set did not classified any observations as negative (Yes).
@@ -327,48 +336,111 @@ This model is much better than the benchmark (~ 30% lower RMSE) but I would stil
 ## D) 
 *Try to improve your model. Take multiple approaches (e.g. feature engineering, more flexible models, stacking, etc.) and document their successes.*
 
-The main feature of the regression is that it's linear, while in reality relationship between variables is often not linear. Also, we do not use the transaction date, latitude and logitude variables properly, so these can certainly improved.
+The main feature of the regression is that it's linear, while in reality relationship between variables is often not linear. Also, we do not use the transaction date, latitude and longitude variables properly, so these can certainly improved.
+
+Firstly, the latitude and longitude values are not so meaningful about the location within a city. To get a more meaningful measure, I searched the geo code of New Tapipei City's central district: Banqiao District. I subsreacted the latitude and longitude parameter from the central district parameter and took the absolute value of them. These *lat_from_centre* and *lon_from_centre* show the distance from the central district, so it's easy to understand and inpret, moreover I expect improvement in the model by them.
+
+
+Secondly, I converted the transaction date to correct date format, and factorized them. It can also improve the model by detecting any seasonality, because before the transaction date was included in numeric format. 
+
+
 
 ```{r feature enginnering}
 summary(reg1)
 
 # Lat and lon values
-lat <-25.105497
-lon <-121.597366
 
 lat<-25.011262
 lon<-121.445867
 
-range(real_estate$latitude)
-range(real_estate$longitude)
-unique(real_estate$date_correct)
-
 
 real_estate <- real_estate %>%  mutate(
-  lat_from_centre = latitude - lat,
-  lon_from_centre = longitude - lon,
-  date_correct = ymd(paste(floor(transaction_date), as.character(round(transaction_date %% 1 * 12+1 ),0),"01", sep="-"))
+  lat_from_centre = abs(latitude - lat),
+  lon_from_centre = abs(longitude - lon),
+  date_correct =ymd(paste(floor(transaction_date), as.character(round(transaction_date %% 1 * 12+1 ),0),"01", sep="-")),
+  house_age_sq = house_age^2,
+  distance_to_the_nearest_MRT_station_sq=distance_to_the_nearest_MRT_station^2
 )
-
+unique(real_estate$date_correct)
+real_estate_test <- slice(real_estate, test_indices)
+real_estate_train <- slice(real_estate, -test_indices)
 
 ggplot(real_estate,aes(x=house_age, y=house_price_of_unit_area))+
   geom_point()+
-  geom_smooth()
+  geom_smooth(methos="loess", color="red")
+
+ggplot(real_estate,aes(x=number_of_convenience_stores, y=house_price_of_unit_area))+
+  geom_point()+
+  geom_smooth(methos="loess", color="red")
+
+ggplot(real_estate,aes(x=distance_to_the_nearest_MRT_station, y=house_price_of_unit_area))+
+  geom_point()+
+  geom_smooth(methos="loess", color="red")
+
+
+ggplot(real_estate,aes(x=date_correct, y=house_price_of_unit_area))+
+  geom_point()+
+  geom_smooth(methos="loess", color="red")
+
+
 
 ```
 
-**Latitude and longitude**
-Banqiao District (Chinese: 板橋區; pinyin: Bǎnqiáo Qū) is a district and the seat of New Taipei City, Taiwan. It has the third-highest population density in Taiwan, with over 24,000 inhabitants per square kilometre (62,000/sq mi). Until the creation of New Taipei City, Banqiao (then transliterated as Banciao or Pan-ch'iao) was an incorporated county-administered city and the former seat of Taipei County.
+
+To better capture the functional for I run a regression with squared variables and adding the new feature engineered geocodes and transaction dates. 
+
+```{r extended regression}
+
+real_estate_test <- slice(real_estate, test_indices)
+real_estate_train <- slice(real_estate, -test_indices)
+
+reg2 <-lm(house_price_of_unit_area ~ house_age+ I(house_age^2) + distance_to_the_nearest_MRT_station+number_of_convenience_stores+ +I(distance_to_the_nearest_MRT_station^2)+ lat_from_centre+lon_from_centre+date_correct  ,data = real_estate_train)
 
 
-```{r modelling}
+# Evaluate train
+RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)
+# Evaluate test
+RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)
 
-reg2 <-lm(house_price_of_unit_area ~  ,data = real_estate_train)
+#summary(reg2)
 
-lasso_reg <-
-  
-  
-rf_realestate <-
+```
+
+The train and test RMSE of the improved regression are `r RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` . The is `r RMSE(reg1$fitted.values,real_estate_train$house_price_of_unit_area) - RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg1,real_estate_test),real_estate_test$house_price_of_unit_area)- RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` improvement on the train and test sets respectively.
+
+
+
+
+```{r random forest for real estate}
+
+#library(glmnet)
+
+#lasso_reg <-glmnet(y=real_estate_train$house_price_of_unit_area, x=real_estate_train[c(-1,-2,-8)] , alpha=1)
+
+
+
+tune_grid <- expand.grid(
+  .mtry = 5, # c(3,4,5, 6, 7),
+ .splitrule = "variance",
+  .min.node.size = 15 # c(10, 15)
+)
+# 
+
+set.seed(20220310)
+formulate_corrected <-"house_price_of_unit_area ~date_correct+house_age+distance_to_the_nearest_MRT_station+number_of_convenience_stores+lat_from_centre+lon_from_centre"
+rf_realestate <-train(
+   form = formula(formulate_corrected),
+  method = "ranger",
+  data = real_estate_train,
+  tuneGrid = tune_grid,
+  metric="RMSE",
+  trControl = ctrl
+)
+
+
+rf_realestate$results$RMSE
+
+RMSE(predict(rf_realestate,real_estate_train),real_estate_train$house_price_of_unit_area)
 
 ```
 
