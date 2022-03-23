@@ -59,7 +59,7 @@ caravan_train <- slice(caravan_sample, -test_indices)
 ## A)
 *What would be a good evaluation metric for this problem? Think about it from the perspective of the business.*
 
-How accurately we can predict, that the caravan will purchase insurance. 100% accurately means that we predict exactly the actual case, 0% certainty means that we predict the opposite (since it binary) in each cases. Accuracy can be calculated by adding the number of correctly classified items and divide it by the total number of items. We can also add a confidence interval using the standard deviation of the accuracy measure.
+A good metric is how accurately we can predict, that the caravan will purchase insurance. 100% accuracy means that we predict exactly the actual case, 0% certainty means that we predict the opposite (since it binary) in each cases. Accuracy can be calculated by adding the number of correctly classified items and divide it by the total number of items. We can also add a confidence interval using the standard deviation of the accuracy measure.
 
 ## B) and C)
 *Let’s use the basic metric for classification problems: the accuracy (% of correctly classified examples). Train a simple logistic regression (using all of the available variables) and evaluate its performance on both the train and the test set. Does this model perform well? (Hint: You might want to evaluate a basic benchmark model first for comparison – e.g. predicting that no one will make a purchase.) *
@@ -73,7 +73,7 @@ caravan_train %>% group_by(Purchase) %>% count() %>% kable() %>%kable_styling(po
 
 ```
 
-The average as the basic benchmark model, we can see that the average of the training data is `r mean(as.numeric(caravan_train$Purchase))` (the labels are 1 and 2).  This means, that if we predict 1 (No insurance) for all of them, we will mistake in just 5.9% of the cases. This really simple model already results `r sum(caravan_train$Purchase=="No")/nrow(caravan_train) * 100` % accuracy.
+The average can be the basic benchmark model, we can see that the average of the training data is `r mean(as.numeric(caravan_train$Purchase))` (the labels are 1 and 2).  This means, that if we predict 1 (No insurance) for all of them, we will mistake in just 5.9% of the cases. This really simple model already results `r sum(caravan_train$Purchase=="No")/nrow(caravan_train) * 100` % accuracy. Applying this benchmark model on the test set, we get `r sum(caravan_test$Purchase=="No")/nrow(caravan_test) * 100`% accuracy.
 
 
 
@@ -101,7 +101,7 @@ logit_model$results %>% kable() %>% kable_styling(latex_options = "HOLD_position
 
 
 
-I trained a logit model with all variables, and it has `r logit_model$results$Accuracy` accuracy, which is quite bad compared to the benchmark model. So let's see the further details of the model and the predictions. 
+I trained a logit model with cross-validation and with all variables, and it has `r logit_model$results$Accuracy` accuracy, which is quite bad compared to the benchmark model. So let's see the further details of the model and the predictions. 
 
 
 ```{r Evaluate logit,results='asis',fig.pos = "H"}
@@ -210,7 +210,7 @@ show_confmat_output(cm_tree_test, "Simple tree - test")
 ```
 
 
-The tree model reached `r cart$results$Accuracy` accuracy on the training set and `r cm_tree_test$overall[1]` on the test set. These are the best values so far, however, the accuracy is close to the simple benchmark model. We can also notice, that the false negative rate decreased while the false positive rate increased compared to the logit model, and we know that false negative is the worse mistake.
+The tree model reached `r cart$results$Accuracy` accuracy on the training set and `r cm_tree_test$overall[1]` on the test set. These are the best values so far except the benchmark, however, the accuracy is close to the simple benchmark model but lower. We can also notice, that the false negative rate decreased while the false positive rate increased compared to the logit model, and we know that false negative is the worse mistake.
 
 ## G)
 *Run a more flexible model (like random forest or GBM). Did it help?*
@@ -250,7 +250,7 @@ show_confmat_output(confusionMatrix(predict(rf_model_p,caravan_test),caravan_tes
 
 
 
-I run a random ofrest as a more flexible model, and it improved the performance. The accuracy value of the train and test set are the highest so far, and the false negative prediction rate is `r confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)$table[2]/nrow(caravan_test)` in each cases. 
+I run a random forest as a more flexible model, and it improved the performance compared to the tree. the random forest classified everthing as 'No' so the accuracy is the same as the benchmark model (classifying everything as 'No'). This accuracy value of the train and test set are the highest so far compared to the other models (logit, tree), and the false negative prediction rate here is `r confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)$table[2]/nrow(caravan_test)` in each cases. 
 
 ## H)
 *Rerun two of your previous models (a flexible and a less flexible one) on the full train set. Ensure that your test result remains comparable by keeping that dataset intact. (Hint: use the anti_join() function as we did in class.) Interpret your results.* 
@@ -372,11 +372,10 @@ The main feature of the regression is that it's linear, while in reality relatio
 Firstly, the latitude and longitude values are not so meaningful about the location within a city. To get a more meaningful measure, I searched the geo code of New Tapipei City's central district: Banqiao District. I subsreacted the latitude and longitude parameter from the central district parameter and took the absolute value of them. These *lat_from_centre* and *lon_from_centre* show the distance from the central district, so it's easy to understand and inpret, moreover I expect improvement in the model by them.
 
 
-Secondly, I converted the transaction date to correct date format, and factorized them. It can also improve the model by detecting any seasonality, because before the transaction date was included in numeric format. 
+Secondly, I converted the transaction date to correct date format. It can also improve the model by detecting any pattern. I also added the month as factor, to detect any seasonality.
+To get more intuition about the data, I visulaized the relationship between price and other variables.
 
-
-
-```{r feature enginnering,fig.pos = "H", fig.height=3.3}
+```{r feature enginnering, fig.pos = "H", fig.height=3.3}
 # Lat and lon values
 
 lat<-25.011262
@@ -387,6 +386,7 @@ real_estate <- real_estate %>%  mutate(
   lat_from_centre = abs(latitude - lat),
   lon_from_centre = abs(longitude - lon),
   date_correct =ymd(paste(floor(transaction_date), as.character(round(transaction_date %% 1 * 12+1 ),0),"01", sep="-")),
+  date_month_factor = as.factor(month(ymd(paste(floor(transaction_date), as.character(round(transaction_date %% 1 * 12+1 ),0),"01", sep="-")))),
   house_age_sq = house_age^2,
   distance_to_the_nearest_MRT_station_sq=distance_to_the_nearest_MRT_station^2
 )
@@ -398,31 +398,29 @@ real_estate_train <- slice(real_estate, -test_indices)
 p1<-ggplot(real_estate,aes(x=house_age, y=house_price_of_unit_area))+
   geom_point()+
   geom_smooth(methos="loess", color="red")+
-  labs(title = "Price and age",y="house price of unit area",x="house age")
+  labs(title = "House age",y="house price of unit area",x="house age")
 
 p2<-ggplot(real_estate,aes(x=number_of_convenience_stores, y=house_price_of_unit_area))+
   geom_point()+
   geom_smooth(methos="loess", color="red")+
-  labs(title = "Price and number of convenience stores",y="house price of unit area",x="number of convenience store")
+  labs(title = "Number of convenience stores",y="house price of unit area",x="number of convenience store")
 
 ggarrange(p1,p2,nrow=1)
 
 p3<-ggplot(real_estate,aes(x=distance_to_the_nearest_MRT_station, y=house_price_of_unit_area))+
   geom_point()+
   geom_smooth(methos="loess", color="red")+
-  labs(title = "Price and distance to the nearest MRT station",y="house price of unit area",x="distance to the nearest MRT station")
+  labs(title = "Distance to the nearest MRT",y="house price of unit area",x="distance to the nearest MRT station")
 
 
 p4<-ggplot(real_estate,aes(x=date_correct, y=house_price_of_unit_area))+
   geom_point()+
   geom_smooth(methos="loess", color="red")+
-  labs(title = "Price and transaction date",y="house price of unit area",x="transaction date")
+  labs(title = "Transaction date",y="house price of unit area",x="transaction date")
 
 ggarrange(p3,p4,nrow=1)
 
 ```
-
-
 
 To better capture the functional for I run a regression with squared variables and adding the new feature engineered geocodes and transaction dates. 
 
@@ -431,7 +429,7 @@ To better capture the functional for I run a regression with squared variables a
 real_estate_test <- slice(real_estate, test_indices)
 real_estate_train <- slice(real_estate, -test_indices)
 
-reg2 <-lm(house_price_of_unit_area ~ house_age+ I(house_age^2) + distance_to_the_nearest_MRT_station+number_of_convenience_stores+ +I(distance_to_the_nearest_MRT_station^2)+ lat_from_centre+lon_from_centre+date_correct  ,data = real_estate_train)
+reg2 <-lm(house_price_of_unit_area ~ house_age+ I(house_age^2) + distance_to_the_nearest_MRT_station+number_of_convenience_stores+ +I(distance_to_the_nearest_MRT_station^2)+ lat_from_centre+lon_from_centre+date_correct+date_month_factor ,data = real_estate_train)
 
 
 # Evaluate train
@@ -441,7 +439,7 @@ RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)
 
 ```
 
-The train and test RMSE of the improved regression are `r RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` . The is `r RMSE(reg1$fitted.values,real_estate_train$house_price_of_unit_area) - RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg1,real_estate_test),real_estate_test$house_price_of_unit_area)- RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` improvement on the train and test sets respectively. However, we can try more flexible models as well.
+The train and test RMSE of the improved regression are `r RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` . There is `r RMSE(reg1$fitted.values,real_estate_train$house_price_of_unit_area) - RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg1,real_estate_test),real_estate_test$house_price_of_unit_area)- RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` improvement on the train and test sets respectively. However, we can try more flexible models as well.
 
 
 Random forest is a great option because we do not have to care about the functional form, so I also trained a random forest using the feature engineered data. By training the random forest, I have tried several but it did not change much. Due to the small dataset, the seed / randomization change a lot on the vales. 
@@ -457,7 +455,7 @@ tune_grid <- expand.grid(
 # 
 
 set.seed(20220310)
-formula_corrected <-"house_price_of_unit_area~date_correct+house_age+distance_to_the_nearest_MRT_station+number_of_convenience_stores+lat_from_centre+lon_from_centre"
+formula_corrected <-"house_price_of_unit_area~date_correct+house_age+distance_to_the_nearest_MRT_station+number_of_convenience_stores+lat_from_centre+lon_from_centre+date_month_factor"
 
 rf_realestate <-train(
    form = formula(formula_corrected),
