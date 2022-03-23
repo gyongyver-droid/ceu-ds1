@@ -2,7 +2,14 @@
 title: "ML-Tools-Assignment-1"
 author: "Gyongyver Kamenar (2103380)"
 date: "3/14/2022"
-output: pdf_document
+eometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output:
+  bookdown::pdf_document2:
+    fig_caption: yes
+    number_sections: no
+    toc: no
+    extra_dependencies: ["float"]
+urlcolor: blue
 ---
 
 ---
@@ -22,7 +29,11 @@ library(tidyverse)
 library(caret)
 library(kableExtra)
 library(lubridate)
-library(stargazer)
+library(ggpubr)
+
+# Set my theme
+devtools::source_url('https://raw.githubusercontent.com/gyongyver-droid/ceu-data-analysis/master/Assignment1/theme_gyongyver.R')
+theme_set(theme_gyongyver())
 ```
 
 
@@ -57,20 +68,22 @@ How accurately we can predict, that the caravan will purchase insurance. 100% ac
 
 ```{r Average as benchmark}
 
-mean(as.numeric(caravan_train$Purchase)) %>% kable()
-caravan_train %>% group_by(Purchase) %>% count() %>% kable()
+mean(as.numeric(caravan_train$Purchase)) %>% kable() %>%kable_styling(position = "center",latex_options = "HOLD_position")
+caravan_train %>% group_by(Purchase) %>% count() %>% kable() %>%kable_styling(position = "center",latex_options = "HOLD_position")
 
 ```
 
-The average as the basic benchmark model, we can see that the average of the training data is `r mean(as.numeric(caravan_train$Purchase))` (the labels are 1 and 2).  This means, that if we predict 1 (No insurance) for all of them, we will mistake in just 5.9% of the cases. This really simple model already results `r sum(caravan_train$Purchase=="No")/nrow(caravan_train) * 100`% accuracy.
+The average as the basic benchmark model, we can see that the average of the training data is `r mean(as.numeric(caravan_train$Purchase))` (the labels are 1 and 2).  This means, that if we predict 1 (No insurance) for all of them, we will mistake in just 5.9% of the cases. This really simple model already results `r sum(caravan_train$Purchase=="No")/nrow(caravan_train) * 100` % accuracy.
 
-```{r Logistic regression}
 
-set.seed(132456)
 
-variables <- colnames(caravan_data[,1:85])
+```{r Logistic regression,fig.pos="H" , results='asis'}
 
-form <- formula(paste0("Purchase ~", paste0(variables, collapse = " + ")))
+set.seed(20220310)
+
+vars2 <- names(caravan_train[,1:85])
+
+form <- formula(paste0("Purchase ~", paste0(vars2, collapse = " + ")))
 
 ctrl <- trainControl(method = "cv", savePredictions = "final", returnResamp = "final")
 
@@ -82,31 +95,36 @@ logit_model <- train(
     trControl = ctrl
   )
 
-logit_model$results %>% kable()# Accuracy 
+logit_model$results %>% kable() %>% kable_styling(latex_options = "HOLD_position")# Accuracy 
 #logit_model$pred
 ```
+
+
 
 I trained a logit model with all variables, and it has `r logit_model$results$Accuracy` accuracy, which is quite bad compared to the benchmark model. So let's see the further details of the model and the predictions. 
 
 
-```{r Evaluate logit,results='asis'}
+```{r Evaluate logit,results='asis',fig.pos = "H"}
 
 show_confmat_output<-function(cm, model_name="model"){
-  print(model_name %>% kable(col.names = ""))
-  pritn(cm$table %>% kable())
-  print(cm$overall %>% kable(col.names = model_name))
-  print(cm$byClass %>% kable(col.names = model_name))
+  print(model_name %>% kable(col.names = "") %>%kable_styling(position = "center",latex_options = "HOLD_position"))
+  print(cm$table %>% kable()%>%kable_styling(position = "center",latex_options = "HOLD_position"))
+  print(cm$overall %>% kable(col.names = model_name)%>%kable_styling(position = "center",latex_options = "HOLD_position"))
+  print(cm$byClass %>% kable(col.names = model_name)%>%kable_styling(position = "center",latex_options = "HOLD_position"))
 }
 
 # Train evaluation
 cm_logit<-confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)
 show_confmat_output(cm_logit,"Logit model train")
 
-# Test evaluation
+
 cm_logit_test<-confusionMatrix(predict(logit_model,caravan_test),caravan_test$Purchase) # Test Accuracy 0.931
 
 show_confmat_output(cm_logit_test,"Logit model test")
 ```
+
+
+
 
 On the train dataset, the logit model classified `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[1]+confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[4]  ` items correctly out of the `r nrow(caravan_train)`. The logit predicted `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[2]` 'Yes' while actually these do not have insurence (FN) and predicted `r confusionMatrix(logit_model$pred$pred,logit_model$pred$obs)$table[3]` 'No' while actually these have/pay insurance (FP). We can see, that the number of false positive classification is much higher than the number of false negative. (Positive class is 'No')
 The sensitivity of the prediction is `r cm_logit$byClass[1]` while the specificity is `r cm_logit$byClass[2]`.
@@ -114,7 +132,7 @@ This means, that the model classified `r cm_logit$table[4]/(cm_logit$table[3]+cm
 The positive predictive value is `r cm_logit$byClass[3]` which is not so bad, however, the negative predictive value is `r cm_logit$byClass[4]` which is really low. It basically means, that the model's negative classifications is in only  `r cm_logit$byClass[4]*100`% true. 
  
  
-On the test dataset, the accuracy is `r cm_logit_test$overall[1]`. The FN rate is `r cm_logit_test$table[2]/nrow(caravan_test)` while the FP rate is `rcm_logit_test$table[3]/nrow(caravan_test)`. The sensitivity is `r cm_logit_test$byClass[1]` while the specificity is `r cm_logit_test$byClass[2]`. Just like on the train set, the false positive rate is much higher then the false negative rate. 
+On the test dataset, the accuracy is `r cm_logit_test$overall[1]`. The FN rate is `r cm_logit_test$table[2]/nrow(caravan_test)` while the FP rate is `r cm_logit_test$table[3]/nrow(caravan_test)`. The sensitivity is `r cm_logit_test$byClass[1]` while the specificity is `r cm_logit_test$byClass[2]`. Just like on the train set, the false positive rate is much higher then the false negative rate. 
 
 ## D)
 *What do you think is a more serious mistake in this situation?*
@@ -125,9 +143,9 @@ The more serious mistake is, when we think/predict that a customer will purchase
 *You might have noticed (if you checked your data first) that most of your features are categorical variables coded as numbers. Turn your features into factors and rerun your logistic regression. Did the prediction performance improve?*
 
 
-```{r Logit with factors, results='asis'}
+```{r Logit with factors, results='asis',fig.pos = "H" }
 
-#summary(caravan_data)
+
 
 caravan_data <-caravan_data %>% mutate_all(
   as.factor
@@ -144,14 +162,14 @@ caravan_train <- slice(caravan_sample, -test_indices)
 
 # rerun logit model with factors
 logit_model_factor <- train(
-    form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
+    form = formula(paste0("Purchase ~", paste0(vars2, collapse = " + "))),
     method    = "glm",
     data      = caravan_train,
     family    = binomial,
      trControl = ctrl
   )
 
-logit_model_factor$results # Accurary 0.78
+logit_model_factor$results %>% kable() %>% kable_styling(latex_options = "HOLD_position") # Accurary 0.78
 
 # Train evaluation
 show_confmat_output(confusionMatrix(logit_model_factor$pred$pred,logit_model_factor$pred$obs), "Logit with factors - train")
@@ -163,13 +181,15 @@ show_confmat_output(confusionMatrix(predict(logit_model_factor,caravan_test),car
 
 ```
 
+
+
 The performance of the model did not improve as we can see from the reports above. The train and test accuracies are both dramatically decreased. Probably, it due to the small sample size and the not too flexible model. It's possible, that there are no observation for each factor for each variable in the train dataset. 
 
 ## F)
 *Let’s try a nonlinear model: build a simple tree model and evaluate its performance.*
 
 
-```{r tree, results='asis'}
+```{r tree, results='asis',fig.pos = "H"}
 set.seed(20220310)
 cart <- train(form=form,
   data=caravan_train,
@@ -179,8 +199,8 @@ cart <- train(form=form,
   trControl = ctrl)
 
 
-cart$results %>% kable()
-cart$results$Accuracy
+cart$results %>% kable() %>% kable_styling(latex_options = "HOLD_position")
+
 # tree train performance
 cm_tree <- confusionMatrix(cart$pred$pred,cart$pred$obs)
 show_confmat_output(cm_tree, "Simple tree - train")
@@ -188,12 +208,16 @@ show_confmat_output(cm_tree, "Simple tree - train")
 cm_tree_test <- confusionMatrix(predict(cart,caravan_test),caravan_test$Purchase)
 show_confmat_output(cm_tree_test, "Simple tree - test")
 ```
+
+
 The tree model reached `r cart$results$Accuracy` accuracy on the training set and `r cm_tree_test$overall[1]` on the test set. These are the best values so far, however, the accuracy is close to the simple benchmark model. We can also notice, that the false negative rate decreased while the false positive rate increased compared to the logit model, and we know that false negative is the worse mistake.
 
 ## G)
 *Run a more flexible model (like random forest or GBM). Did it help?*
 
-```{r random forest model,results='asis'}
+
+
+```{r random forest model,results='asis',fig.pos = "H"}
 
 tune_grid <- expand.grid(
   .mtry = 5, # c(5, 6, 7),
@@ -205,7 +229,7 @@ tune_grid <- expand.grid(
 # getModelInfo("ranger")
 set.seed(20220310)
 rf_model_p <- train(
-   form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
+   form = formula(paste0("Purchase ~", paste0(vars2, collapse = " + "))),
   method = "ranger",
   data = caravan_train,
   tuneGrid = tune_grid,
@@ -213,7 +237,7 @@ rf_model_p <- train(
   trControl = ctrl
 )
 # Results
-rf_model_p$results %>% kable() # Accuracy 0.94
+rf_model_p$results %>% kable() %>% kable_styling(latex_options = "HOLD_position")# Accuracy 0.94
 
 #Random forest train evaluation
 show_confmat_output(confusionMatrix(rf_model_p$pred$pred,rf_model_p$pred$obs),"Random forest - train")
@@ -223,13 +247,16 @@ show_confmat_output(confusionMatrix(rf_model_p$pred$pred,rf_model_p$pred$obs),"R
 show_confmat_output(confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase),"Random forest - test")
 
 ```
+
+
+
 I run a random ofrest as a more flexible model, and it improved the performance. The accuracy value of the train and test set are the highest so far, and the false negative prediction rate is `r confusionMatrix(predict(rf_model_p,caravan_test),caravan_test$Purchase)$table[2]/nrow(caravan_test)` in each cases. 
 
 ## H)
 *Rerun two of your previous models (a flexible and a less flexible one) on the full train set. Ensure that your test result remains comparable by keeping that dataset intact. (Hint: use the anti_join() function as we did in class.) Interpret your results.* 
 
 
-```{r Treee Modelling on the full set, message=FALSE, warning=FALSE,results='asis'}
+```{r Treee Modelling on the full set, message=FALSE, warning=FALSE,results='asis',fig.pos = "H"}
 
 caravan_full_train <- anti_join(caravan_data,caravan_test)
 
@@ -242,8 +269,8 @@ cart_full <- train(form=form,
   trControl = ctrl)
 
 
-cart_full$results %>% kable()
-cart_full$results$Accuracy
+cart_full$results %>% kable() %>% kable_styling(latex_options = "HOLD_position")
+
 # tree train performance
 cm_tree_full <- confusionMatrix(cart_full$pred$pred,cart_full$pred$obs)
 show_confmat_output(cm_tree_full,"Full sample tree - train")
@@ -253,11 +280,13 @@ show_confmat_output(cm_tree_test_full,"Full sample tree - test")
 
 
 ```
-```{r Random forest on full set,results='asis'}
+
+
+```{r Random forest on full set,results='asis',fig.pos = "H"}
 
 set.seed(20220310)
 rf_model_full <- train(
-   form = formula(paste0("Purchase ~", paste0(variables, collapse = " + "))),
+   form = formula(paste0("Purchase ~", paste0(vars2, collapse = " + "))),
   method = "ranger",
   data = caravan_full_train,
   tuneGrid = tune_grid,
@@ -265,17 +294,19 @@ rf_model_full <- train(
   trControl = ctrl
 )
 # Results
-rf_model_full$results %>% kable() # Accuracy 
+rf_model_full$results %>% kable() %>% kable_styling(latex_options = "HOLD_position") # Accuracy 
 
 #Random forest train evaluation
 show_confmat_output(confusionMatrix(rf_model_full$pred$pred,rf_model_full$pred$obs),"Full sample random forest -train")
-
 
 # Random forest Test evaluation
 show_confmat_output(confusionMatrix(predict(rf_model_full,caravan_test),caravan_test$Purchase),"Full sample random forest - test")
 ```
 
-The models trained on the full set did not classified any observations as negative (Yes).
+
+
+
+We can see on the tables above, that the models trained on the full set did not classified any observations as negative (Yes). So the models performance did not improve compared to the benchmark model (classifying everything as no) because of the extremely low number of 'Yes' cases. Generally, random forest and decision trees are great algorithms, but this example shows than when the frequency of one class is really rare it's really complicated to make good classification models. 
 
 
 ## Problem 2 
@@ -320,7 +351,7 @@ The RMSE on the train and test sets are `r RMSE(benchmark$fitted.values,real_est
 ## C)
 *Build a simple linear regression model and evaluate its performance. Would you launch your evaluator web app using this model?*
 
-```{r}
+```{r Reg1,fig.pos = "H"}
 vars <- names(real_estate)[2:7]
 formula <-paste0("house_price_of_unit_area~",paste( as.list(vars),collapse = '+',sep=''))
 
@@ -345,9 +376,7 @@ Secondly, I converted the transaction date to correct date format, and factorize
 
 
 
-```{r feature enginnering}
-summary(reg1)
-
+```{r feature enginnering,fig.pos = "H", fig.height=3.3}
 # Lat and lon values
 
 lat<-25.011262
@@ -361,30 +390,38 @@ real_estate <- real_estate %>%  mutate(
   house_age_sq = house_age^2,
   distance_to_the_nearest_MRT_station_sq=distance_to_the_nearest_MRT_station^2
 )
-unique(real_estate$date_correct)
+
+
 real_estate_test <- slice(real_estate, test_indices)
 real_estate_train <- slice(real_estate, -test_indices)
 
-ggplot(real_estate,aes(x=house_age, y=house_price_of_unit_area))+
+p1<-ggplot(real_estate,aes(x=house_age, y=house_price_of_unit_area))+
   geom_point()+
-  geom_smooth(methos="loess", color="red")
+  geom_smooth(methos="loess", color="red")+
+  labs(title = "Price and age",y="house price of unit area",x="house age")
 
-ggplot(real_estate,aes(x=number_of_convenience_stores, y=house_price_of_unit_area))+
+p2<-ggplot(real_estate,aes(x=number_of_convenience_stores, y=house_price_of_unit_area))+
   geom_point()+
-  geom_smooth(methos="loess", color="red")
+  geom_smooth(methos="loess", color="red")+
+  labs(title = "Price and number of convenience stores",y="house price of unit area",x="number of convenience store")
 
-ggplot(real_estate,aes(x=distance_to_the_nearest_MRT_station, y=house_price_of_unit_area))+
+ggarrange(p1,p2,nrow=1)
+
+p3<-ggplot(real_estate,aes(x=distance_to_the_nearest_MRT_station, y=house_price_of_unit_area))+
   geom_point()+
-  geom_smooth(methos="loess", color="red")
+  geom_smooth(methos="loess", color="red")+
+  labs(title = "Price and distance to the nearest MRT station",y="house price of unit area",x="distance to the nearest MRT station")
 
 
-ggplot(real_estate,aes(x=date_correct, y=house_price_of_unit_area))+
+p4<-ggplot(real_estate,aes(x=date_correct, y=house_price_of_unit_area))+
   geom_point()+
-  geom_smooth(methos="loess", color="red")
+  geom_smooth(methos="loess", color="red")+
+  labs(title = "Price and transaction date",y="house price of unit area",x="transaction date")
 
-
+ggarrange(p3,p4,nrow=1)
 
 ```
+
 
 
 To better capture the functional for I run a regression with squared variables and adding the new feature engineered geocodes and transaction dates. 
@@ -402,23 +439,16 @@ RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)
 # Evaluate test
 RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)
 
-#summary(reg2)
-
 ```
 
-The train and test RMSE of the improved regression are `r RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` . The is `r RMSE(reg1$fitted.values,real_estate_train$house_price_of_unit_area) - RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg1,real_estate_test),real_estate_test$house_price_of_unit_area)- RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` improvement on the train and test sets respectively.
+The train and test RMSE of the improved regression are `r RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` . The is `r RMSE(reg1$fitted.values,real_estate_train$house_price_of_unit_area) - RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)` and `r RMSE(predict(reg1,real_estate_test),real_estate_test$house_price_of_unit_area)- RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)` improvement on the train and test sets respectively. However, we can try more flexible models as well.
 
 
+Random forest is a great option because we do not have to care about the functional form, so I also trained a random forest using the feature engineered data. By training the random forest, I have tried several but it did not change much. Due to the small dataset, the seed / randomization change a lot on the vales. 
 
+```{r random forest for real estate, message=FALSE, warning=FALSE}
 
-```{r random forest for real estate}
-
-#library(glmnet)
-
-#lasso_reg <-glmnet(y=real_estate_train$house_price_of_unit_area, x=real_estate_train[c(-1,-2,-8)] , alpha=1)
-
-
-
+# Random forest
 tune_grid <- expand.grid(
   .mtry = 5, # c(3,4,5, 6, 7),
  .splitrule = "variance",
@@ -427,9 +457,10 @@ tune_grid <- expand.grid(
 # 
 
 set.seed(20220310)
-formulate_corrected <-"house_price_of_unit_area ~date_correct+house_age+distance_to_the_nearest_MRT_station+number_of_convenience_stores+lat_from_centre+lon_from_centre"
+formula_corrected <-"house_price_of_unit_area~date_correct+house_age+distance_to_the_nearest_MRT_station+number_of_convenience_stores+lat_from_centre+lon_from_centre"
+
 rf_realestate <-train(
-   form = formula(formulate_corrected),
+   form = formula(formula_corrected),
   method = "ranger",
   data = real_estate_train,
   tuneGrid = tune_grid,
@@ -444,10 +475,44 @@ RMSE(predict(rf_realestate,real_estate_train),real_estate_train$house_price_of_u
 
 ```
 
+Surprisingly, the test RMSE of the random forest is much lower than the train RMSE. It is probably not because of overfit, because overfitting would result higher test RMSE than train. It is probably by accident, and because of the small sample. The real estate test set has only 82 observations, so this test RMSE value is not so well-founded. 
+The train RMSE of the random forest improved `r round(RMSE(reg2$fitted.values,real_estate_train$house_price_of_unit_area)-rf_realestate$results$RMSE,2)` compared to the previous regression while the test improved `r round(RMSE(predict(reg2,real_estate_test),real_estate_test$house_price_of_unit_area)-RMSE(predict(rf_realestate,real_estate_train),real_estate_train$house_price_of_unit_area),2) `.  
+ ` 
+
+
+I also trained a GBM similarly to the random forest, on the feature engineered data and trying different hyperparameters. 
+
+```{r GBoost, message=FALSE, warning=FALSE}
+gbm_grid <-  expand.grid(interaction.depth = 5, # complexity of the tree
+                         n.trees = 100, # number of iterations, i.e. trees
+                         shrinkage = 0.05, # learning rate: how quickly the algorithm adapts
+                         n.minobsinnode = 10 # the minimum number of training set samples in a node to commence splitting
+)
+
+set.seed(20220310)
+gbm_model <- train(formula(formula_corrected),
+                     data = real_estate_train,
+                     method = "gbm",
+                     trControl = ctrl,
+                     verbose = FALSE,
+                     tuneGrid = gbm_grid)
+
+# GBM train RMSE
+gbm_model$results$RMSE
+# GBM test RMSE
+RMSE(predict(gbm_model,real_estate_test),real_estate_test$house_price_of_unit_area)
+
+```
+
+The test RMSE of the GBM is nearly the same as the random forest's, while the GBM's test RMSE is higher than the random forest's but is still lower than the train, so it likely no overfitting. Both the GBM and random foest has much lower RMSE on each set than the regressions.
+
 
 
 ## E) 
 *Would you launch your web app now? What options you might have to further improve the prediction performance?*
 
+The more flexible models (random forest and GBM) perform better than the regressions and I find them more reliable as well. However, on such a small dataset like this, it is hard to make a good model. The RMSE improved a lot compared to the benchmark model, but  it's still 4-7 times 10000 New Taiwan Dollar/Ping (where Ping is a local unit, 1 Ping = 3.3 meter squared). 
 
+
+To improve the models, I would definitely collect more data  to train my models before launching the web app. The data collection would be in both dimensions aka more variables like rooms, exact location, district, condition ... and more observations as well. Webscraping could be an easy solution for this. 
 
