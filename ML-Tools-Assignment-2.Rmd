@@ -1,0 +1,104 @@
+---
+title: "ML-Tools-Assignment-2"
+author: "Gyongyver Kamenar (2103380)"
+date: "3/27/2022"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output:
+  bookdown::pdf_document2:
+    fig_caption: yes
+    number_sections: no
+    toc: no
+    extra_dependencies: ["float"]
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r}
+library(tidyverse)
+library(kableExtra)
+library(keras)
+library(ggplot2)
+
+
+# Set my theme
+devtools::source_url('https://raw.githubusercontent.com/gyongyver-droid/ceu-data-analysis/master/Assignment1/theme_gyongyver.R')
+#theme_set(theme_gyongyver())
+```
+
+
+# Problem 1
+
+
+## A)
+**What would be an appropriate metric to evaluate your models? Why?**
+
+Accuracy would be an appropriate metric
+
+## B)
+**Get the data and show some example images from the data.**
+
+
+```{r Get the data}
+myseed<-20220403
+set.seed(myseed)
+data <-dataset_mnist()
+
+train_x<-data$train$x
+train_y<-data$train$y
+
+test_x<-data$train$x
+test_y<-data$train$test
+
+# Merge features with labels for the plot
+train <-cbind(as.tibble(data$train$x),y=data$train$y)
+
+# Factorizing and scaling
+train <- train %>% mutate(
+  y = as.factor(y),
+  across(-y, ~./255)
+)
+
+
+par(mfrow=c(10, 3), pty='s', mai=c(0.2, 0, 0, 0.1))
+
+for (lab in 0:9) {
+  samp <- train %>%
+    filter(y == lab)
+  for (i in 1:3) {
+    img <- matrix(as.numeric(samp[i, -1]), 28, 28, byrow = TRUE)
+    image(t(img)[,28:1], axes = FALSE, col = grey(seq(1, 0, length = 256)))
+    box(lty = 'solid')
+  }
+}
+```
+
+ 
+```
+
+
+
+## C)
+**Train a simple fully connected network with a single hidden layer to predict the digits. Do not forget to normalize the data similarly to what we saw with FMNIST in class.**
+
+
+
+
+
+## D)
+**Experiment with different network architectures and settings (number of hidden layers, number of nodes, type and extent of regularization, etc.). Train at least 5 models. Explain what you have tried, what worked and what did not. Make sure that you use enough epochs so that the validation error starts flattening out - provide a plot about the training history.**
+
+
+## E) 
+**Choose a final model and evaluate it on the test set. How does test error compare to validation error?**
+
+
+# Problem 2
+
+
