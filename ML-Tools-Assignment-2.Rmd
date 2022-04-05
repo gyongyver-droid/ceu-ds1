@@ -20,7 +20,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(kableExtra)
 library(keras)
@@ -39,20 +39,27 @@ devtools::source_url('https://raw.githubusercontent.com/gyongyver-droid/ceu-data
 ## A)
 **What would be an appropriate metric to evaluate your models? Why?**
 
-Accuracy would be an appropriate metric
+Accuracy would be an appropriate metric here, because it reports the correctly clasified images as the percentage of all and neglects the tradeoff between false classification. We can assume in this digit recognition project, that false classifications have equal loss. For example, we want to classify a digit 1 to label 1, but if it's not successful aka we did not classified it as 1, it does not matter which false label it has. I does not matter whether it's classified as 0,2,3,4 ... so on, anything other than 1. So the only thing matters to us it the rate of correctly classified cases, which is captured by accuracy.
 
 ## B)
 **Get the data and show some example images from the data.**
 
-
-```{r Get the data}
-myseed<-20220403
-set.seed(myseed)
+```{r Get the data, warning=FALSE}
+my_seed<-20200403
+set.seed(my_seed)
+# Get the data
 data <-dataset_mnist()
+ind <- sample(nrow(data$train$x),round(nrow(data$train$x)*0.8,0))
 
-train_x<-data$train$x
-train_y<-data$train$y
+# train set
+train_x<-as.matrix(as.tibble(data$train$x)[ind,])
+train_y<-as.matrix(as.tibble(data$train$y)[ind,])
+train_x
+# validation set
+valid_x<-as.matrix(as.tibble(data$train$x)[-ind,])
+valid_y<-as.matrix(as.tibble(data$train$y)[-ind,])
 
+# test set
 test_x<-data$test$x
 test_y<-data$test$y
 
@@ -88,13 +95,15 @@ for (lab in 0:9) {
 ## C)
 **Train a simple fully connected network with a single hidden layer to predict the digits. Do not forget to normalize the data similarly to what we saw with FMNIST in class.**
 
-
-```{r Build simple model}
+First, I normalized and converted the data into correct format. Then I build a model with 1 hidden layer using 128 neurons and the 'Relu' activation function. I used 0.2 dropout rate and output layer with 10 neurons using the softmax activation function. See the model summary below.
+```{r Build simple model, message=FALSE, warning=FALSE}
 
 train_x<-array_reshape(train_x/255,c(nrow(train_x),784))
+valid_x<-array_reshape(valid_x/255,c(nrow(valid_x),784))
 test_x<-array_reshape(test_x/255,c(nrow(test_x),784))
 
 train_y <- to_categorical(train_y, num_classes = 10)
+valid_y <- to_categorical(valid_y, num_classes = 10)
 test_y <- to_categorical(test_y, num_classes = 10)
 
 simple_keras <- keras_model_sequential()
@@ -107,7 +116,7 @@ summary(simple_keras)
 ```
 
 ```{r train simple model}
-
+set.seed(my_seed)
 compile(
     simple_keras,
     loss = 'categorical_crossentropy',
@@ -115,21 +124,232 @@ compile(
     metrics = c('accuracy')
 )
 
-fit(
+digits1_history <-fit(
     simple_keras, train_x, train_y,
-    epochs = 20, batch_size = 20,
-    validation_data = list(test_x, test_y)
+    epochs = 50, batch_size = 100,
+    validation_data = list(valid_x, valid_y)
 )
 
+# Plot results
+plot(digits1_history)
+
+digits1_history
 ```
 
 ```{r Evaluate simple model}
-evaluate(simple_keras, test_x, test_y)
+res<-evaluate(simple_keras, valid_x, valid_y)
+evaluate(simple_keras, valid_x, valid_y)
+
+# Checking predictions and confusioon matrix
+pred<-predict(simple_keras,valid_x)
+pred <- format(round(pred, 2), nsamll = 4)
+
+
+pred <- data.frame("0"=pred[,1], "1"=pred[,2], "2"=pred[,3], "3"=pred[,4], "4"=pred[,5], "5"=pred[,6], "6"=pred[,7], "7"=pred[,8], "8"=pred[,9], "9"=pred[,10], 
+          "predicted" = ifelse(max.col(pred[ ,1:10])==1, "green",
+                        ifelse(max.col(pred[ ,1:3])==2, "red", "yellow")),
+          original = test_y)
+
+
+which(pred[1,]>0.5)
+result<-c()
+for(i in 1:nrow(pred)){
+  result[i]<-which(pred[i,]>0.5)-1
+}
+
+
+
+y<-c()
+for(i in 1:nrow(valid_y)){
+  y[i]<-which(valid_y[i,]>0.5)-1
+}
+
+cm<-caret::confusionMatrix(factor(result),factor(y))
+cm$table
 ```
 
 
+
+
+ The accuracy on the test set is `r round(res[2]*100,2)` %. You can see the confusion matrix above. 
+
 ## D)
 **Experiment with different network architectures and settings (number of hidden layers, number of nodes, type and extent of regularization, etc.). Train at least 5 models. Explain what you have tried, what worked and what did not. Make sure that you use enough epochs so that the validation error starts flattening out - provide a plot about the training history.**
+
+In my second model, I added one more hidden layer with 64 neurons and relu activation function. I expect that due to the plus layer, the model will perform better.
+
+```{r model 2, message=FALSE, warning=FALSE}
+
+extended_keras1 <- keras_model_sequential()
+extended_keras1 |>
+    layer_dense(units = 128, activation = 'relu', input_shape = c(784)) |>
+    layer_dense(units = 64, activation = 'relu', input_shape = c(784)) |>
+    layer_dropout(rate = 0.2) |>
+    layer_dense(units = 10, activation = 'softmax')
+
+summary(extended_keras1)
+set.seed(my_seed)
+compile(
+    extended_keras1,
+    loss = 'categorical_crossentropy',
+    optimizer = optimizer_adam(),
+    metrics = c('accuracy')
+)
+
+digits2_history <-fit(
+    extended_keras1, train_x, train_y,
+    epochs = 50, batch_size = 100,
+    validation_data = list(valid_x, valid_y)
+)
+
+# Plot results
+
+plot(digits2_history)
+
+digits2_history
+
+```
+
+We can see, that a valuation accuracy increased from `r round(digits1_history$metrics$val_accuracy[50],4)` to `r rount(digits2_history$metrics$val_accuracy[50],4)` in the second model. Besides, we can also see on the training plot, that the valuation accuracy reached this much earlier, it it steeper in the first few epochs.
+
+In my 3rd model, I add two more layers and more neurons, to test, whether it will similarly increase accuracy.
+
+```{r model 3}
+
+extended_keras2 <- keras_model_sequential()
+extended_keras2 |>
+    layer_dense(units = 256, activation = 'relu', input_shape = c(784)) |>
+    layer_dense(units = 128, activation = 'relu', input_shape = c(784)) |>
+    layer_dense(units = 64, activation = 'relu', input_shape = c(784)) |>
+  layer_dense(units = 32, activation = 'relu', input_shape = c(784)) |>
+    layer_dropout(rate = 0.2) |>
+    layer_dense(units = 10, activation = 'softmax')
+
+summary(extended_keras2)
+set.seed(my_seed)
+compile(
+    extended_keras2,
+    loss = 'categorical_crossentropy',
+    optimizer = optimizer_adam(),
+    metrics = c('accuracy')
+)
+
+digits3_history <-fit(
+    extended_keras2, train_x, train_y,
+    epochs = 50, batch_size = 100,
+    validation_data = list(valid_x, valid_y)
+)
+
+# Plot results
+
+plot(digits3_history)
+
+digits3_history
+
+
+```
+
+
+In the next model, I increase batch size from 100 to 200, and I use 2 hidden layers just like in the second model. 
+
+```{r model 4}
+
+extended_keras3 <- keras_model_sequential()
+extended_keras3 |>
+    layer_dense(units = 128, activation = 'relu', input_shape = c(784)) |>
+    layer_dense(units = 64, activation = 'relu', input_shape = c(784)) |>
+    layer_dropout(rate = 0.2) |>
+    layer_dense(units = 10, activation = 'softmax')
+
+summary(extended_keras3)
+set.seed(my_seed)
+compile(
+    extended_keras3,
+    loss = 'categorical_crossentropy',
+    optimizer = optimizer_adam(),
+    metrics = c('accuracy')
+)
+
+digits4_history <-fit(
+    extended_keras1, train_x, train_y,
+    epochs = 50, batch_size = 200,
+    validation_data = list(valid_x, valid_y)
+)
+
+# Plot results
+
+plot(digits4_history)
+
+digits4_history
+
+
+```
+
+The bigger batch size clearly not helped the model. The valuation accuracy is continously decreasing. Therefore, I try the same with smaller batch size = 50.
+
+```{r model 5}
+extended_keras4 <- keras_model_sequential()
+extended_keras4 |>
+    layer_dense(units = 128, activation = 'relu', input_shape = c(784)) |>
+    layer_dense(units = 64, activation = 'relu', input_shape = c(784)) |>
+    layer_dropout(rate = 0.2) |>
+    layer_dense(units = 10, activation = 'softmax')
+
+summary(extended_keras4)
+set.seed(my_seed)
+compile(
+    extended_keras4,
+    loss = 'categorical_crossentropy',
+    optimizer = optimizer_adam(),
+    metrics = c('accuracy')
+)
+
+digits5_history <-fit(
+    extended_keras1, train_x, train_y,
+    epochs = 50, batch_size = 50,
+    validation_data = list(valid_x, valid_y)
+)
+
+# Plot results
+
+plot(digits5_history)
+
+digits5_history
+```
+It seems like the smaller batch size also performed worse than model 2 wiith batch size=100, so it seems like 100 is about the appropriate value in this setting.
+In the 5th extended model, I try using other activation function,  softmax instead of the previously used relu in the hidden layers.
+
+
+```{r model 6}
+extended_keras5 <- keras_model_sequential()
+extended_keras5 |>
+    layer_dense(units = 128, activation = 'softmax', input_shape = c(784)) |>
+    layer_dense(units = 64, activation = 'softmax', input_shape = c(784)) |>
+    layer_dropout(rate = 0.2) |>
+    layer_dense(units = 10, activation = 'softmax')
+
+summary(extended_keras5)
+set.seed(my_seed)
+compile(
+    extended_keras5,
+    loss = 'categorical_crossentropy',
+    optimizer = optimizer_adam(),
+    metrics = c('accuracy')
+)
+
+digits6_history <-fit(
+    extended_keras5, train_x, train_y,
+    epochs = 50, batch_size = 100,
+    validation_data = list(valid_x, valid_y)
+)
+
+# Plot results
+
+plot(digits6_history)
+
+digits6_history
+```
+
 
 
 
@@ -193,8 +413,8 @@ valid_generator <- flow_images_from_directory(
 
 ```{r Build CNN for hot dogs}
 
-cnn_model_w_augmentation <- keras_model_sequential()
-cnn_model_w_augmentation |>
+cnn_model_wo_augmentation <- keras_model_sequential()
+cnn_model_wo_augmentation |>
     layer_conv_2d(
         filters = 32,
         kernel_size = c(3, 3),
@@ -208,21 +428,30 @@ cnn_model_w_augmentation |>
     layer_dense(units = 1, activation = 'softmax')
 
 compile(
-    cnn_model_w_augmentation,
+    cnn_model_wo_augmentation,
     loss = 'binary_crossentropy',
     optimizer = optimizer_adam(),
     metrics = c('accuracy')
 )
 
-fit(
-    cnn_model_w_augmentation,
+history1 <-fit(
+    cnn_model_wo_augmentation,
     train_generator,
     epochs = 20,
-    steps_per_epoch = 10, #nrow(data_train_x) / batch_size,  # this does not make a difference here -- batch_size of the generator determines how training works
+    steps_per_epoch = 8, #nrow(data_train_x) / batch_size,  # this does not make a difference here -- batch_size of the generator determines how training works
     validation_data = valid_generator,
-    validation_steps = 10#nrow(data_valid_x) / batch_size
+    validation_steps = 8#nrow(data_valid_x) / batch_size
 )
+
+cnn_model_wo_augmentation %>% save_model_hdf5("hotdog_cnn1.h5")
+
+plot(history1)
 ```
+
+```{r Show results on CNN}
+history1
+```
+
 
 The train and test accuracy are both about 50% which means, that this binary classification model is not better than random :(. 
 
@@ -231,9 +460,112 @@ The train and test accuracy are both about 50% which means, that this binary cla
 ## E)
 **Could data augmentation techniques help with achieving higher predictive accuracy? Try some augmentations that you think make sense and compare to your previous model.**
 
+
+```{r data augmentation}
+train_datagen <- image_data_generator(
+  rescale = 1/255,
+  rotation_range = 50,
+  width_shift_range = 0.1,
+  height_shift_range = 0.1,
+  shear_range = 0.1,
+  zoom_range = 0.1,
+  horizontal_flip = TRUE,
+  fill_mode = "nearest"
+)
+
+
+
+
+train_generator <- flow_images_from_directory(
+    directory="C:/CEU/DS1/ceu-ds1/data/train/",
+    class_mode = "binary",
+    generator = train_datagen,
+    batch_size = batch_size,
+    target_size = c(128, 128)
+)
+
+valid_generator <- flow_images_from_directory(
+    directory="C:/CEU/DS1/ceu-ds1/data/test/",
+    class_mode = "binary",
+    generator = valid_datagen,
+    batch_size = batch_size,
+    target_size = c(128, 128)
+)
+
+# try the same model, just with augmentation
+cnn_model_w_augmentation <- keras_model_sequential()
+cnn_model_w_augmentation |>
+    layer_conv_2d(
+        filters = 32,
+        kernel_size = c(3, 3),
+        activation = 'relu',
+        input_shape = c(128, 128, 3)
+    ) |>
+    layer_average_pooling_2d(pool_size = c(2, 2)) |>
+    layer_dropout(rate = 0.1) |>
+    layer_flatten() |>
+    layer_dense(units = 64, activation = 'relu') |>
+    layer_dense(units = 1, activation = 'softmax')
+
+compile(
+    cnn_model_w_augmentation,
+    loss = 'binary_crossentropy',
+    optimizer = optimizer_adam(),
+    metrics = c('accuracy')
+)
+
+history2 <-fit(
+    cnn_model_w_augmentation,
+    train_generator,
+    epochs = 30,
+    steps_per_epoch = 8, #nrow(data_train_x) / batch_size,  # this does not make a difference here -- batch_size of the generator determines how training works
+    validation_data = valid_generator,
+    validation_steps = 8#nrow(data_valid_x) / batch_size
+)
+
+cnn_model_w_augmentation %>% save_model_hdf5("hotdog_cnn2.h5")
+
+plot(history2)
+
+```
+
+
+Try the same model
+
+```{r Result}
+history2
+
+```
+
+
 ## optional
 **Try to rely on some pre-built neural networks to aid prediction. Can you achieve a better performance using transfer learning for this problem?**
 
+
+Using Resnet50 pre-trained model from keras
+
+```{r resnet50}
+
+library(keras)
+
+# instantiate the model
+model <- application_resnet50(weights = 'imagenet')
+
+# load the image
+img_path <- "../data/train/hot_dog/7896.jpg"
+img <- image_load(img_path, target_size = c(224,224))
+x <- image_to_array(img)
+
+# ensure we have a 4d tensor with single element in the batch dimension,
+# the preprocess the input for prediction using resnet50
+x <- array_reshape(x, c(1, dim(x)))
+x <- imagenet_preprocess_input(x)
+
+# make predictions then decode and print them
+preds <- model %>% predict(x)
+imagenet_decode_predictions(preds, top = 3)[[1]]
+
+```
 
 
 
