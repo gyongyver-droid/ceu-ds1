@@ -2,7 +2,7 @@
 title: "ML-Tools-Assignment-1"
 author: "Gyongyver Kamenar (2103380)"
 date: "3/14/2022"
-eometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
 output:
   bookdown::pdf_document2:
     fig_caption: yes
