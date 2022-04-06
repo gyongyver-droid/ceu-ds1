@@ -27,9 +27,6 @@ library(keras)
 library(ggplot2)
 library(imager)
 
-# Set my theme
-devtools::source_url('https://raw.githubusercontent.com/gyongyver-droid/ceu-data-analysis/master/Assignment1/theme_gyongyver.R')
-#theme_set(theme_gyongyver())
 ```
 
 
@@ -140,35 +137,12 @@ digits1_history
 res<-evaluate(simple_keras, valid_x, valid_y)
 evaluate(simple_keras, valid_x, valid_y)
 
-# Checking predictions and confusioon matrix
-pred<-predict(simple_keras,valid_x)
-#pred <- format(round(pred, 2), nsamll = 4)
-
-# 
-# pred <- data.frame("0"=pred[,1], "1"=pred[,2], "2"=pred[,3], "3"=pred[,4], "4"=pred[,5], "5"=pred[,6], "6"=pred[,7], "7"=pred[,8], "8"=pred[,9], "9"=pred[,10] )
-# 
-# 
-# which(pred[1,]==max(pred[1,]))
-# result<-c()
-# for(i in 1:nrow(pred)){
-#   result[i]<-which(pred[i,]>0.5)-1
-# }
-# 
-# 
-# 
-# y<-c()
-# for(i in 1:nrow(valid_y)){
-#   y[i]<-which(valid_y[i,]>0.5)-1
-# }
-# 
-# cm<-caret::confusionMatrix(factor(result),factor(y))
-# cm$table
 ```
 
 
 
 
- The accuracy on the test set is `r round(res[2]*100,2)` %. You can see the confusion matrix above. 
+ The accuracy on the test set is `r round(res[2]*100,2)` %. This seems a good metric at first on a 10 class classification problem. If we suppose that there are the same number of observation from each categories, it would mean 10% accuracy with the simplest classification. Compared to that, the simple keras model performed really well.
 
 ## D)
 **Experiment with different network architectures and settings (number of hidden layers, number of nodes, type and extent of regularization, etc.). Train at least 5 models. Explain what you have tried, what worked and what did not. Make sure that you use enough epochs so that the validation error starts flattening out - provide a plot about the training history.**
@@ -207,7 +181,7 @@ digits2_history
 
 ```
 
-We can see, that a valuation accuracy increased from `r round(digits1_history$metrics$val_accuracy[50],4)` to `r round(digits2_history$metrics$val_accuracy[50],4)` in the second model. Besides, we can also see on the training plot, that the valuation accuracy reached this much earlier, it it steeper in the first few epochs.
+We can see, that a valuation accuracy increased from `r round(digits1_history$metrics$val_accuracy[50],4)` to `r round(digits2_history$metrics$val_accuracy[50],4)` in the second model. Besides, we can also see on the training plot, that the valuation accuracy reached this a bit earlier but is started from higher value, it is not so steep in the first few epochs as the simple model.
 
 In my 3rd model, I add two more layers and more neurons, to test, whether it will similarly increase accuracy.
 
@@ -313,7 +287,7 @@ plot(digits5_history)
 
 digits5_history
 ```
-It seems like the smaller batch size also performed worse than model 2 wiith batch size=100, so it seems like 100 is about the appropriate value in this setting.
+It seems like the smaller batch size also performed worse than model 2 and model 1 with batch size=100, so it seems like 100 is about the appropriate value in this setting.
 In the 5th extended model, I try using other activation function,  softmax instead of the previously used relu in the hidden layers.
 
 
@@ -348,7 +322,7 @@ digits6_history
 ```
 
 
-We can see from the accuracy measures, that the softmax activation function performes worse than the relu. So in my last model, I set all of them to relu and also change the optimaser from adam to rmsprop.
+We can see from the accuracy measures, that the softmax activation function performes worse than the relu. So in my last model, I set all of them to relu and also change the optimizer from adam to rmsprop.
 
 ```{r}
 
@@ -383,18 +357,19 @@ digits7_history
 
 ```
 
+This model laso performed poorly compared to the first two, so I definiately wanto to use a model with adam optimizer.
 
 
 ## E) 
 **Choose a final model and evaluate it on the test set. How does test error compare to validation error?**
 
-My chose model is the first one, the simple model with 1 hidden layer. See the summary below.
+My chose model is the first one, the simple model with 1 hidden layer. It's simple, and it has the highest validation accuracy. See the summary below.
 
 ```{r Final model}
 
 summary(simple_keras)
 ```
-Evaluation on the test set.
+Evaluation on the test set:
 
 ```{r test}
 
@@ -403,12 +378,14 @@ evaluate(simple_keras,test_x,test_y)
 ```
 
 
-The test accuracy is higher than the validation accuracy on the model. It's still a bit lower than the training accuracy, because that is around 100%. It's a good sign that the test is higher than the validation accuracy, it can be partly due lack, partly due to the huge smaller sample size of the test. This model is certainly not overfitted on the validation set, so I would be confident using it.
+The test accuracy is around the same/ a bit higher than the validation accuracy on the model. It's still a bit lower than the training accuracy, because that is around 100%. It's a good sign that the test is higher than the validation accuracy, it can be partly due lack, partly due to the huge smaller sample size of the test. This model is certainly not overfitted on the validation set, so I would be confident using it.
 
 # Problem 2
 
 ## A)
 **Show two images: one hot dog and one not hot dog. (Hint: You may use knitr::include_graphics() or install the imager package to easily accomplish this.)**
+
+Showing a hot dog and a not hot dog:
 
 ```{r Get pictures}
 #Show hot dog
@@ -424,15 +401,17 @@ plot(not_hot_dog, main="Not hot dog")
 ## B)
 **What would be a good metric to evaluate such a prediction?**
 
+Accuracy would be also a good metric here, because we want to maximize the number of correctly classified images and we are indifferent between false negative and false positive cases. So classifying a hot dog as not hot dog is  equally bad than classifying a not hot dog as hot dog in this case, only we case about the ratio of correctly classified images. 
 
 
 
 ## C)
 **To be able to train a neural network for prediction, let’s first build data batch generator functions as we did in class for data augmentation (train_generator and valid_generator). **
 
+I did the necessary steps to build data batch generator function from directory as you can see below:
 
 ```{r data batch generator}
-batch_size <- 16
+batch_size <- 32
 
 train_datagen <- image_data_generator(rescale = 1/255)
 
@@ -459,6 +438,7 @@ valid_generator <- flow_images_from_directory(
 ## D)
 **Build a simple convolutional neural network (CNN) to predict if an image is a hot dog or not. Evaluate your model on the test set. (Hint: Account for the fact that you work with colored images in the input_shape parameter: set the third dimension to 3 instead of 1.)**
 
+Building a simple CNN:
 
 ```{r Build CNN for hot dogs}
 
@@ -475,7 +455,7 @@ cnn_model_wo_augmentation |>
     layer_flatten() |>
     layer_dense(units = 32, activation = 'relu') |>
     layer_dense(units = 1, activation = 'softmax')
-
+set.seed(my_seed)
 compile(
     cnn_model_wo_augmentation,
     loss = 'binary_crossentropy',
@@ -487,9 +467,9 @@ history1 <-fit(
     cnn_model_wo_augmentation,
     train_generator,
     epochs = 20,
-    steps_per_epoch = 8, #nrow(data_train_x) / batch_size,  # this does not make a difference here -- batch_size of the generator determines how training works
+    steps_per_epoch =floor(length(train_generator$labels)/batch_size), #8, #nrow(data_train_x) / batch_size,  # this does not make a difference here -- batch_size of the generator determines how training works
     validation_data = valid_generator,
-    validation_steps = 8#nrow(data_valid_x) / batch_size
+    validation_steps =floor(length(valid_generator$labels)/batch_size) #8#nrow(data_valid_x) / batch_size
 )
 
 cnn_model_wo_augmentation %>% save_model_hdf5("hotdog_cnn1.h5")
@@ -501,14 +481,32 @@ plot(history1)
 history1
 ```
 
+```{r cnn-model-evaluation}
+evaluate(cnn_model_wo_augmentation,valid_generator , valid_generator$labels)
+```
 
-The train and test accuracy are both about 50% which means, that this binary classification model is not better than random :(. 
+```{r cnn-predictions}
+keras_predictions <- predict(cnn_model_wo_augmentation, valid_generator)
+predicted_labels <- k_argmax(keras_predictions) |> as.numeric()
+table(valid_generator$labels, predicted_labels)
+```
+
+
+The train and test accuracy are both about 50% which means, that this binary classification model is not better than random :(. (We have the same number of images in both classes.)
 
 
 
 ## E)
 **Could data augmentation techniques help with achieving higher predictive accuracy? Try some augmentations that you think make sense and compare to your previous model.**
 
+Trying to improve accuracy, I tried the following augmentation steps:
+ - rotation range=50 : rotating the images within 50 degrees, to randomly rotate the pictures. I suppose the 50 degrees is appropriate here, bigger rotation might just cause confusion between images.
+ - whidth_shift and height_shift 0.1 : fraction of width and height within which randomly translate pictures horizontally and vertically. 
+ - zoom_range=0.1 : randomly zooming in pictures. The food is usually at the center of the picture, so minimal zooming cannot cause harm
+ - shear_range=0.1 randomly applying shearing transformation
+ - horizontal_flip :  randomly flipping half the images horizontally. In this "food case" horizontal flip do not change the classification/meaning of the image
+ - fill_mode: is the strategy used for filling in newly created pixels, which can appear after a rotation or a width/height shift.
+ 
 
 ```{r data augmentation}
 train_datagen <- image_data_generator(
@@ -521,7 +519,6 @@ train_datagen <- image_data_generator(
   horizontal_flip = TRUE,
   fill_mode = "nearest"
 )
-
 
 
 
@@ -555,7 +552,7 @@ cnn_model_w_augmentation |>
     layer_flatten() |>
     layer_dense(units = 64, activation = 'relu') |>
     layer_dense(units = 1, activation = 'softmax')
-
+set.seed(my_seed)
 compile(
     cnn_model_w_augmentation,
     loss = 'binary_crossentropy',
@@ -567,9 +564,9 @@ history2 <-fit(
     cnn_model_w_augmentation,
     train_generator,
     epochs = 30,
-    steps_per_epoch = 8, #nrow(data_train_x) / batch_size,  # this does not make a difference here -- batch_size of the generator determines how training works
+    steps_per_epoch =floor(length(train_generator$labels)/batch_size), #8, #nrow(data_train_x) / batch_size,  # this does not make a difference here -- batch_size of the generator determines how training works
     validation_data = valid_generator,
-    validation_steps = 8#nrow(data_valid_x) / batch_size
+    validation_steps =floor(length(valid_generator$labels)/batch_size)# 8#nrow(data_valid_x) / batch_size
 )
 
 cnn_model_w_augmentation %>% save_model_hdf5("hotdog_cnn2.h5")
@@ -579,19 +576,28 @@ plot(history2)
 ```
 
 
-Try the same model
-
 ```{r Result}
 history2
 
 ```
 
 
+```{r}
+evaluate(cnn_model_w_augmentation,valid_generator,valid_generator$labels)
+```
+
+I tried the same model with them mentioned augmentation steps, and the valuation accuracy changed from `r round(tail(history1$metrics$val_accuracy,1),4)` to `r round(tail(history2$metrics$val_accuracy,1),4)`. So the model with augmentation is still around the performance of random classification. 
+
+It not a surprising result, we have really low number of observation (~500 images) and the images are really different even within class. Not surprising ,that the model cannot recognize the hot dog patter in just 250 images which are really different. It would be interesting to train the same model on larger dataset, like on 10 GB of images, bit it would probably destroy an average PC. 
+
+Instead, we can try a pre-trained model in the next subtask.
+
+
 ## optional
 **Try to rely on some pre-built neural networks to aid prediction. Can you achieve a better performance using transfer learning for this problem?**
 
-
-Using Resnet50 pre-trained model from keras
+ResNet-50 model is a convolutional neural network (CNN) that is 50 layers deep. A Residual Neural Network (ResNet) is an Artificial Neural Network (ANN) of a kind that stacks residual blocks on top of each other to form a network.
+Using Resnet50 pre-trained model from keras, I try an image of a hot dog and show the top 3 predictions:
 
 ```{r resnet50}
 
@@ -612,11 +618,63 @@ x <- imagenet_preprocess_input(x)
 
 # make predictions then decode and print them
 preds <- model %>% predict(x)
-imagenet_decode_predictions(preds, top = 3)[[1]]
+pred<-imagenet_decode_predictions(preds, top = 1)[[1]]
+pred$class_description
+```
+
+We can see that at #1 it is correctly classified as hot dog.
+
+Do classification based on this model with the top1 class.
+
+
+```{r}
+hot_dogs<-list.files("C:/CEU/DS1/ceu-ds1/data/test/hot_dog")
+
+path<-"C:/CEU/DS1/ceu-ds1/data/test/hot_dog/"
+
+hot_dog_pred<-c()
+for(i in hot_dogs){
+  img <- image_load(paste0(path,i), target_size = c(224,224))
+  x <- image_to_array(img)
+
+# ensure we have a 4d tensor with single element in the batch dimension,
+# the preprocess the input for prediction using resnet50
+  x <- array_reshape(x, c(1, dim(x)))
+  x <- imagenet_preprocess_input(x)
+
+# make predictions then decode and print them
+  preds <- model %>% predict(x)
+  hot_dog_pred[i]<-imagenet_decode_predictions(preds, top = 1)[[1]]$class_description
+}
+
+sum(hot_dog_pred=="hotdog")
+```
+
+```{r}
+not_hot_dogs<-list.files("C:/CEU/DS1/ceu-ds1/data/test/not_hot_dog")
+
+path<-"C:/CEU/DS1/ceu-ds1/data/test/not_hot_dog/"
+
+not_hot_dog_pred<-c()
+for(i in not_hot_dogs){
+  img <- image_load(paste0(path,i), target_size = c(224,224))
+  x <- image_to_array(img)
+
+# ensure we have a 4d tensor with single element in the batch dimension,
+# the preprocess the input for prediction using resnet50
+  x <- array_reshape(x, c(1, dim(x)))
+  x <- imagenet_preprocess_input(x)
+
+# make predictions then decode and print them
+  preds <- model %>% predict(x)
+  not_hot_dog_pred[i]<-imagenet_decode_predictions(preds, top = 1)[[1]]$class_description
+}
+
+sum(not_hot_dog_pred!="hotdog")
 
 ```
 
 
-
-
-
+The resnet50 model correctly classified `r sum(hot_dog_pred=="hotdog")+sum(not_hot_dog_pred!="hotdog")` out of `r length(hot_dogs)+length(not_hot_dogs)` images in the test set, and we can see that the model is much better classifying not hot dog. 
+This actually means `r round((sum(hot_dog_pred=="hotdog")+sum(not_hot_dog_pred!="hotdog"))/(length(hot_dogs)+length(not_hot_dogs)), 4) ` accuracy, which is much better than my previously trained model with accuracy around 0.5. 
+This problem is a good example for the benefit of using transfer learning, instead of trying to train a "better than random " model.
