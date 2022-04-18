@@ -1,0 +1,260 @@
+---
+title: "ML-Tools-Assignment-3"
+author: "Gyongyver Kamenar (2103380)"
+date: "4/12/2022"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output:
+  bookdown::pdf_document2:
+    fig_caption: yes
+    number_sections: no
+    toc: no
+    extra_dependencies: ["float"]
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r Load  libraries}
+library(tidyverse)
+library(caret)
+library(MLmetrics)
+library(xgboost)
+library(pROC)
+```
+
+
+Get the data
+
+```{r Get the data}
+
+df<-read.csv("./online news data/train.csv")
+test_submission<-read.csv("./online news data/test.csv")
+sample_submission<-read.csv("./online news data/sample_submission.csv")
+myseed<-20220412
+
+set.seed(myseed)
+```
+
+
+# Exporatory data analysis
+
+
+
+```{r EDA}
+str(train)
+
+# Drop unnecessary columns: timedelta, article_id
+df<-subset(df, select = -c(timedelta, article_id))
+
+df<-df %>% mutate(
+  is_popular = factor(is_popular, levels = list(1,0), labels = c('yes','no'))
+)
+```
+
+
+
+### Visualization
+
+```{r}
+
+
+
+
+```
+
+
+
+# Prepare modeling
+```{r Prepare modelling}
+
+# Train test split
+ind <- sample(nrow(df),round(nrow(df)*0.85,0))
+train<-df[ind,]
+test<-df[-ind,]
+```
+
+
+
+# Logit model as benchmark
+
+I trained a logit model on the train dataset with crossvalidation
+
+```{r Logit}
+
+vars <- names(train[,1:(length(train)-1)])
+
+form <- formula(paste0("is_popular ~", paste0(vars, collapse = " + ")))
+
+ctrl <- trainControl(method = "cv",
+                     number=5, 
+                     savePredictions = "final", 
+                     returnResamp = "final", 
+                     classProbs = TRUE,
+                     summaryFunction = prSummary)
+
+set.seed(myseed)
+
+logit_model <- train(
+    form = form,
+    method    = "glm",
+    data      = train,
+    family    = binomial,
+    trControl = ctrl
+  )
+
+logit_model$results # AUC 0.231
+Accuracy(logit_model$pred$pred,train$is_popular) # Accuracy 0.869
+
+confusionMatrix(logit_model$pred$pred,train$is_popular) #too much false negative
+```
+
+# Lasso model
+
+
+```{r Lasso model}
+
+lambda <- 10^seq(1, -4, length = 50)
+grid <- expand.grid("alpha" = 1, lambda = lambda)
+
+# Run LASSO
+set.seed(myseed)
+lasso_model <- train(form,
+                      data = train,
+                      method = "glmnet",
+                      preProcess = c("center", "scale"),
+                      trControl = ctrl,
+                      tuneGrid = grid)
+# Check the output
+lasso_model$bestTune
+lasso_model$results
+
+Accuracy(lasso_model$pred$pred,train$is_popular)
+
+
+```
+
+
+# Random forest
+
+
+```{r Random forest}
+
+# do 5-fold CV
+#train_control <- trainControl(method = "cv",
+ #                             number = 5,
+  #                            verboseIter = FALSE)
+
+# set tuning
+tune_grid <- expand.grid(
+  .mtry = 5, # c(5, 6, 7),
+  .splitrule = "gini",
+  .min.node.size = 10 # c(10, 15)
+)
+# By default ranger understands that the outcome is binary, 
+#   thus needs to use 'gini index' to decide split rule
+# getModelInfo("ranger")
+set.seed(myseed)
+rf_model_p <- train(
+  form,
+  method = "ranger",
+  data = train,
+  tuneGrid = tune_grid,
+  trControl = ctrl
+)
+
+
+save( rf_model_p , file = 'rf_model_1.RData' )
+
+rf_model_p$results
+
+
+
+```
+
+
+# XGBoost
+
+```{r XGBoost}
+
+xgb_grid_1 = expand.grid(
+  nrounds = 1000,
+  max_depth = c(2, 4, 6, 8, 10), #depth of the tree
+  eta=c(0.5, 0.1, 0.07), #learning rate
+  gamma = 0.01, # minimum loss reduction
+  colsample_bytree=0.5, # variables to choose from (%)
+  min_child_weight=1,
+  subsample=0.5
+)
+
+xgb_trcontrol_1 = trainControl(
+  method = "cv",
+  number = 5,
+  verboseIter = FALSE,
+  returnData = FALSE,
+  returnResamp = "final", # save losses across all models
+  classProbs = TRUE,  # set to TRUE for AUC to be computed
+  summaryFunction = prSummary,
+  allowParallel = TRUE
+)
+
+set.seed(myseed)
+xgb_train_1 = train(
+  x = as.matrix(train[ ,1:(length(train)-1)]),
+  y = as.matrix(train$is_popular),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_1,
+  method = "xgbTree"
+)
+
+
+
+xgb_train_1$results
+xgb1_raw_model <- xgb.save.raw(xgb_train_1$finalModel)
+
+#save(xgb_train_1,file ="xgb_train_1.RData")
+```
+
+
+
+# Deeplearning with keras
+
+```{r}
+library(keras)
+
+
+
+```
+
+
+
+# Feature engineering
+
+
+```{r Feature engineering}
+# convert to numeric
+df <- df %>% mutate_at(
+  .vars = vars(colnames(df)[startsWith(colnames(df),"d_")]),
+  .funs = (as.numeric)
+)
+```
+
+
+# Load models
+
+```{r}
+xgb_train_1 <- xgb.load.raw(xgb1_raw_model)
+
+```
+
+
+
+
+
+
