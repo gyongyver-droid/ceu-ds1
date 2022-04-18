@@ -185,8 +185,8 @@ rf_model_p$results
 
 xgb_grid_1 = expand.grid(
   nrounds = 1000,
-  max_depth = c(2, 4, 6, 8, 10), #depth of the tree
-  eta=c(0.5, 0.1, 0.07), #learning rate
+  max_depth = c(2, 4, 6, 8, 10), #depth of the tree 2
+  eta=c(0.5, 0.1, 0.07), #learning rate 0.07
   gamma = 0.01, # minimum loss reduction
   colsample_bytree=0.5, # variables to choose from (%)
   min_child_weight=1,
@@ -216,19 +216,87 @@ xgb_train_1 = train(
 
 
 xgb_train_1$results
-xgb1_raw_model <- xgb.save.raw(xgb_train_1$finalModel)
+xgb_train_1
+
+
+saveRDS(xgb1_raw_model,file = "xgb1_raw_model.rds")
+#testmodel<-readRDS(file = "xgb1_raw_model.rds")
+
+saveRDS(xgb_train_1,"./Kaggle models/xgb_train_1.rds")
+#xgb_train_1<-readRDS("xgb_train_1.rds")
 
 #save(xgb_train_1,file ="xgb_train_1.RData")
+
+auc(as.numeric(test$is_popular),predict(xgb_train_1,test, type = "prob")$yes)
+#predict(xgb_train_1,test, type = "prob")
+Accuracy(predict(xgb_train_1,test),test$is_popular)
 ```
 
+```{r}
+testxgb<-xgb.load(testmodel)
+predict(testrds, test)
+testrds$bestTune
+```
 
 
 # Deeplearning with keras
 
-```{r}
+```{r Keras modelling}
 library(keras)
+# Prepare data
+set.seed(myseed)
 
+keras_ind <- sample(nrow(train),round(nrow(train)*0.85,0))
+keras_train<-train[keras_ind,]
+keras_valid<-train[-keras_ind,]
+train_x<-as.matrix(subset(keras_train,select = -is_popular))
+train_y<-as.numeric(keras_train$is_popular)-1
 
+valid_x<-subset(keras_valid,select = -is_popular)
+valid_y<-as.numeric(keras_valid$is_popular)-1
+
+test_x<-subset(test,select = -is_popular)
+test_y<-test$is_popular
+
+# Reshape
+
+train_y<-to_categorical(train_y,num_classes = 2)
+valid_y<-to_categorical(valid_y,num_classes = 2)
+
+# Build model
+
+simple_keras <- keras_model_sequential()
+simple_keras |>
+    layer_dense(units = 128, activation = 'relu', input_shape = c(58)) |>
+    layer_dropout(rate = 0.2) |>
+    layer_dense(units = 2, activation = 'softmax')
+
+summary(simple_keras)
+```
+
+```{r Train simple keras model}
+
+batch_size=8
+compile(
+    simple_keras,
+    loss = 'binary_crossentropy',
+    optimizer = optimizer_adam(),
+    metrics = c('accuracy')
+)
+
+history1 <-fit(
+    simple_keras,
+    train_x, train_y,
+    epochs = 20,
+    batch_size = 16,
+    #steps_per_epoch =100, 
+    validation_split = 0.15
+    #validation_steps =floor(nrow(train_x)*0.15/8) #8#nrow(data_valid_x) / batch_size
+)
+
+simple_keras %>% save_model_hdf5("simple_keras.h5")
+
+plot(history1)
 
 ```
 
@@ -238,10 +306,12 @@ library(keras)
 
 
 ```{r Feature engineering}
-# convert to numeric
+# convert  dummy variables to factors
 df <- df %>% mutate_at(
-  .vars = vars(colnames(df)[startsWith(colnames(df),"d_")]),
-  .funs = (as.numeric)
+  .vars = vars(colnames(df)[startsWith(colnames(df),"data_channel") |
+                            startsWith(colnames(df),"weekday") |
+                            startsWith(colnames(df),"is_week")]),
+  .funs = (as.factor())
 )
 ```
 
@@ -249,11 +319,11 @@ df <- df %>% mutate_at(
 # Load models
 
 ```{r}
-xgb_train_1 <- xgb.load.raw(xgb1_raw_model)
+
 
 ```
 
-
+# Train XGBoost with feature engineered data
 
 
 
