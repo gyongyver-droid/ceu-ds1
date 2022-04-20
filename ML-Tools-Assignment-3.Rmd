@@ -21,12 +21,13 @@ knitr::opts_chunk$set(
 ```
 
 
-```{r Load  libraries}
+```{r Load  libraries, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(caret)
 library(MLmetrics)
 library(xgboost)
 library(pROC)
+library(ggplot2)
 ```
 
 
@@ -48,7 +49,7 @@ set.seed(myseed)
 
 
 ```{r EDA}
-str(train)
+str(df)
 
 # Drop unnecessary columns: timedelta, article_id
 df<-subset(df, select = -c(timedelta, article_id))
@@ -101,7 +102,7 @@ ctrl <- trainControl(method = "cv",
 
 set.seed(myseed)
 
-logit_model <- train(
+logit_model <- caret::train(
     form = form,
     method    = "glm",
     data      = train,
@@ -144,12 +145,8 @@ Accuracy(lasso_model$pred$pred,train$is_popular)
 # Random forest
 
 
-```{r Random forest}
+```{r Random forest, message=FALSE, warning=FALSE, eval=FALSE}
 
-# do 5-fold CV
-#train_control <- trainControl(method = "cv",
- #                             number = 5,
-  #                            verboseIter = FALSE)
 
 # set tuning
 tune_grid <- expand.grid(
@@ -159,9 +156,8 @@ tune_grid <- expand.grid(
 )
 # By default ranger understands that the outcome is binary, 
 #   thus needs to use 'gini index' to decide split rule
-# getModelInfo("ranger")
 set.seed(myseed)
-rf_model_p <- train(
+rf_model_p <- caret::train(
   form,
   method = "ranger",
   data = train,
@@ -169,12 +165,15 @@ rf_model_p <- train(
   trControl = ctrl
 )
 
-
+# save model
 save( rf_model_p , file = 'rf_model_1.RData' )
 
 rf_model_p$results
 
+```
 
+```{r Evalutate rf}
+# Load model
 
 ```
 
@@ -253,7 +252,7 @@ xgb_grid_2 = expand.grid(
   max_depth = 2, #depth of the tree 2
   eta=0.07, #learning rate 0.07
   gamma = 0.01, # minimum loss reduction
-  colsample_bytree=0.5, # variables to choose from (%)
+  colsample_bytree=0.5, # variables to choose from 
   min_child_weight=1,
   subsample=0.5
 )
@@ -279,12 +278,18 @@ xgb_train_full = caret::train(
 )
 
 
-xgb_train_full$results
+xgb_train_full$results # 0.9394
 saveRDS(xgb_train_full,"./Kaggle models/xgb_train_full.rds")
 sample_submission$score<-predict(xgb_train_1,test_submission,type="prob")$yes
 
 write.csv(sample_submission,"sample_submission2.csv", row.names=FALSE)
 
+```
+```{r xgb full 1 evaluate}
+xgb_train_full<-readRDS("Kaggle models/xgb_train_full.rds")
+xgb_train_full$results # 0.9394
+auc(as.numeric(test$is_popular),predict(xgb_train_full,test, type = "prob")$yes)# 0.831
+Accuracy(predict(xgb_train_full,test ),test$is_popular) 
 ```
 
 
@@ -331,6 +336,7 @@ saveRDS(xgb_train_2,"./Kaggle models/xgb_train_2.rds")
 
 ```{r Evaluate xgb_train_2}
 # Test 
+xgb_train_2<-readRDS("./Kaggle models/xgb_train_2.rds")
 auc(as.numeric(test$is_popular),predict(xgb_train_2,test, type = "prob")$yes) # 0.7521
 #predict(xgb_train_1,test, type = "prob")
 Accuracy(predict(xgb_train_2,test),test$is_popular) # 0.8704
@@ -348,8 +354,8 @@ write.csv(sample_submission,"sample_submission3.csv", row.names=FALSE)
 
 xgb_grid_3 = expand.grid(
   nrounds = 1000,
-  max_depth = 4, #depth of the tree 2
-  eta= 0.02, #learning rate 0.07
+  max_depth = c(4,6), #depth of the tree 
+  eta= 0.008, #learning rate 
   gamma = 0.07, # minimum loss reduction
   colsample_bytree=0.7, # variables to choose from (ratio)
   min_child_weight=0.5,
@@ -380,6 +386,86 @@ write.csv(sample_submission,"./Kaggle submission/sample_submission4.csv", row.na
 ```
 
 
+```{r Evaluate xgb full2}
+xgb_train_full2<-readRDS("./Kaggle models/xgb_train_full2.rds")
+
+
+```
+
+# Improve
+```{r xgb full3}
+xgb_grid_3 = expand.grid(
+  nrounds = 1000,
+  max_depth = c(4,6), #depth of the tree 
+  eta= 0.008, #learning rate 
+  gamma = 0.07, # minimum loss reduction
+  colsample_bytree=0.7, # variables to choose from (ratio)
+  min_child_weight=0.5,
+  subsample=0.5
+)
+
+
+set.seed(myseed)
+xgb_train_full3 = caret::train(
+  x = as.matrix(df[ ,1:(length(df)-1)]),
+  y = as.matrix(df[,length(df)]),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+
+saveRDS(xgb_train_full3,"./Kaggle models/xgb_train_full3.rds")
+
+xgb_train_full3$results # AUC 0.9417
+
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_full3,test, type = "prob")$yes) # AUC 0.916
+
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_full3,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission7.csv", row.names=FALSE)
+```
+
+
+```{r xgb full4}
+xgb_grid_3 = expand.grid(
+  nrounds = 1000,
+  max_depth = c(8,10), #depth of the tree c(6,7,8)
+  eta= 0.003, #learning rate 
+  gamma = 0.07, # minimum loss reduction
+  colsample_bytree=0.7, # variables to choose from (ratio)
+  min_child_weight=0.5,
+  subsample=0.5
+)
+
+
+set.seed(myseed)
+xgb_train_3 = caret::train(
+  x = as.matrix(df[ ,1:(length(df)-1)]),
+  y = as.matrix(df[,length(df)]),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+xgb_train_full4<-xgb_train_3
+saveRDS(xgb_train_full4,"./Kaggle models/xgb_train_full4.rds")
+
+xgb_train_full4$results # AUC train0.9387 AUC full 0.9427
+
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_full4,test, type = "prob")$yes) # AUC train 0.7477 AUC full 0.977
+
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_full4,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission9.csv", row.names=FALSE)
+
+varImp(xgb_train_full4, scale=FALSE)
+xgb.importance(xgb_train_full4$finalModel$feature_names, model = xgb_train_full4$finalModel)
+
+```
+
 
 # Deeplearning with keras
 
@@ -391,26 +477,31 @@ set.seed(myseed)
 keras_ind <- sample(nrow(train),round(nrow(train)*0.85,0))
 keras_train<-train[keras_ind,]
 keras_valid<-train[-keras_ind,]
+
 train_x<-as.matrix(subset(keras_train,select = -is_popular))
+popular<-c("yes","no")
+
 train_y<-as.numeric(keras_train$is_popular)-1
 
 valid_x<-as.matrix(subset(keras_valid,select = -is_popular))
 valid_y<-as.numeric(keras_valid$is_popular)-1
 
-test_x<-subset(test,select = -is_popular)
-test_y<-test$is_popular
+test_x<-as.matrix(subset(test,select = -is_popular))
+test_y<-as.numeric(test$is_popular)-1
 
+test_submission_x<-as.matrix(subset(test_submission,select = -c(timedelta, article_id)))
 # Reshape
 
 train_y<-to_categorical(train_y,num_classes = 2)
 valid_y<-to_categorical(valid_y,num_classes = 2)
+test_y<-to_categorical(test_y,num_classes = 2)
 
 # Build model
 
 simple_keras <- keras_model_sequential()
 simple_keras |>
-    layer_dense(units = 32, activation = 'relu', input_shape = c(58)) |>
-    layer_dropout(rate = 0.2) |>
+    layer_dense(units = 128, activation = 'relu', input_shape = c(58)) |>
+    layer_dropout(rate = 0.4) |>
     layer_dense(units = 2, activation = 'softmax')
 
 summary(simple_keras)
@@ -418,19 +509,20 @@ summary(simple_keras)
 
 ```{r Train simple keras model}
 library(tensorflow)
-batch_size=16
+batch_size=8
 compile(
     simple_keras,
     loss = 'binary_crossentropy',
-    optimizer = optimizer_adam(),
+    optimizer = optimizer_adam(lr=0.05), # learning rate
     metrics = tf$keras$metrics$AUC()
 )
 
 history1 <-fit(
     simple_keras,
-    train_x, train_y,
-    epochs = 10,
-    batch_size = 16,
+    x=train_x, 
+    y=train_y,
+    epochs = 20,
+    batch_size = batch_size,
     #steps_per_epoch =floor(nrow(train_x)*0.85/batch_size), 
     validation_split = 0.2,
     #validation_steps =floor(nrow(train_x)*0.15/batch_size) 
@@ -442,14 +534,29 @@ plot(history1)
 
 ```
 
+```{r Evaludate simple keras}
+simple_keras<-load_model_hdf5("./Kaggle models/simple_keras.h5")
+evaluate(simple_keras,valid_x,valid_y) # AUC 0.8752
+evaluate(simple_keras,test_x,test_y) # AUC 0.8703
+# prediction
+predict(simple_keras,test_x, type="prob")
+auc(as.numeric(test_y),predict(simple_keras,test_x))
+predict_classes(simple_keras,test_x)
+# Test 
+auc(as.numeric(test$is_popular),predict(xgb_train_2,test_x, type = "prob")$yes) # 0.7521
+#predict(xgb_train_1,test, type = "prob")
 
-```{r Keras model 2}
+```
+
+
+
+```{r Keras model 2, message=FALSE, warning=FALSE, eval=FALSE}
 
 keras_model_2 <- keras_model_sequential()
 keras_model_2 |>
     layer_dense(units = 64, activation = 'relu', input_shape = c(58)) |>
     layer_dense(units = 128, activation = 'relu', input_shape = c(58)) |>
-    layer_dropout(rate = 0.22) |>
+    layer_dropout(rate = 0.25) |>
     layer_dense(units = 2, activation = 'softmax')
 
 summary(keras_model_2)
@@ -477,24 +584,69 @@ history2 <-fit(
     validation_steps =floor(nrow(train_x)*0.2/batch_size) 
 )
 
-keras_model_2 %>% save_model_hdf5("./Kaggle models/keras_model_2.h5")
+#keras_model_2 %>% save_model_hdf5("./Kaggle models/keras_model_2.h5")
 
 plot(history2)
 
 ```
 
 
+```{r Evaluate}
+keras_model_2<-load_model_hdf5("./Kaggle models/keras_model_2.h5", custom_objects = NULL, compile = TRUE)
+
+auc(valid_y,predict(keras_model_2,valid_x)) # 0.8734
+auc(test_y,predict(keras_model_2,test_x)) # 0.8686
+```
+
+# Stacking models
+```{r Stacking}
+sample_submission$score<-predict(keras_model_2,test_submission_x)[,2]*0.2+predict(xgb_train_full2,test_submission,type="prob")$yes*0.8
+write.csv(sample_submission,"./Kaggle submission/sample_submission5.csv", row.names=FALSE)
+
+sample_submission$score<-predict(xgb_train_full,test, type = "prob")$yes*0.2+predict(xgb_train_full2,test_submission,type="prob")$yes*0.8
+write.csv(sample_submission,"./Kaggle submission/sample_submission6.csv", row.names=FALSE)
+
+```
+
+It did not improve the model
+
 # Feature engineering
 
 
 ```{r Feature engineering}
+library(reshape2)
 # convert  dummy variables to factors
+df<-read.csv("./online news data/train.csv")
+levels<-function(x){
+  return(factor(x,levels = list(1,0), labels = c('yes','no')))
+}
 df <- df %>% mutate_at(
   .vars = vars(colnames(df)[startsWith(colnames(df),"data_channel") |
                             startsWith(colnames(df),"weekday") |
-                            startsWith(colnames(df),"is_week")]),
-  .funs = (as.factor())
+                            startsWith(colnames(df),"is_")]),
+  .funs = levels
 )
+df<-subset(df, select = -c(timedelta))
+str(df)
+names(df)
+token_vars<-c("n_tokens_title" ,"n_tokens_content","n_unique_tokens",  "n_non_stop_words" , "n_non_stop_unique_tokens", "num_hrefs" , "num_self_hrefs", "num_imgs","num_videos" , "average_token_length" ,"num_keywords")
+
+kw_vars<-c("kw_min_min" , "kw_max_min", "kw_avg_min"   , "kw_min_max" , "kw_max_max" , "kw_avg_max", "kw_min_avg", "kw_max_avg","kw_avg_avg","LDA_00" , "LDA_01" , "LDA_02" ,"LDA_03" , "LDA_04")
+
+sentiment_vars<-c("global_subjectivity" ,"global_sentiment_polarity", "global_rate_positive_words", "global_rate_negative_words","rate_positive_words",  "rate_negative_words","avg_positive_polarity"  ,"min_positive_polarity", "max_positive_polarity" , "avg_negative_polarity","min_negative_polarity",    "max_negative_polarity" ,"title_subjectivity" ,         "title_sentiment_polarity" , "abs_title_subjectivity"  ,      "abs_title_sentiment_polarity" , "is_popular")
+
+plot_hist_facet<-function(df, vars){
+  p<-subset(df, select = vars) %>% gather(vars) %>%  ggplot()+
+    geom_histogram(aes(value), fill="midnightblue", bins=30)+
+    facet_wrap(~vars,scales = 'free_x')
+  return(p)
+}
+
+plot_hist_facet(df,token_vars)
+
+plot_hist_facet(df, kw_vars)
+
+plot_hist_facet(df, sentiment_vars)
 ```
 
 
@@ -508,5 +660,51 @@ df <- df %>% mutate_at(
 # Train XGBoost with feature engineered data
 
 
+```{r}
+train<-df[ind,]
+test<-df[-ind,]
+
+xgb_trcontrol_1 = trainControl(
+  method = "cv",
+  number = 5,
+  verboseIter = TRUE,
+  returnData = FALSE,
+  returnResamp = "final", # save losses across all models
+  classProbs = TRUE,  # set to TRUE for AUC to be computed
+  summaryFunction = prSummary,
+  allowParallel = TRUE
+)
+
+xgb_grid_3 = expand.grid(
+  nrounds = 1000,
+  max_depth = 4, #depth of the tree 2
+  eta= 0.02, #learning rate 0.07
+  gamma = 0.07, # minimum loss reduction
+  colsample_bytree=0.7, # variables to choose from (ratio)
+  min_child_weight=0.5,
+  subsample=0.5
+)
+
+
+
+set.seed(myseed)
+xgb_train_full3 = caret::train(
+  x = as.matrix(train[ ,1:(length(train)-1)]),
+  y = as.matrix(train[,length(train)]),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+
+saveRDS(xgb_train_full3,"./Kaggle models/xgb_train_full3.rds")
+
+xgb_train_full2$results # AUC 0.940977
+
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_full2,test, type = "prob")$yes) # AUC 0.8814
+
+
+```
 
 
