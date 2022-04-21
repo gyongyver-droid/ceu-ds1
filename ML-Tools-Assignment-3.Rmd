@@ -28,6 +28,7 @@ library(MLmetrics)
 library(xgboost)
 library(pROC)
 library(ggplot2)
+library(kableExtra)
 ```
 
 
@@ -49,7 +50,7 @@ set.seed(myseed)
 
 
 ```{r EDA}
-str(df)
+#str(df)
 
 # Drop unnecessary columns: timedelta, article_id
 df<-subset(df, select = -c(timedelta, article_id))
@@ -65,14 +66,37 @@ df<-df %>% mutate(
 
 ```{r}
 
+token_vars<-c("n_tokens_title" ,"n_tokens_content","n_unique_tokens",  "n_non_stop_words" , "n_non_stop_unique_tokens", "num_hrefs" , "num_self_hrefs", "num_imgs","num_videos" , "average_token_length" ,"num_keywords")
 
+kw_vars<-c("kw_min_min" , "kw_max_min", "kw_avg_min"   , "kw_min_max" , "kw_max_max" , "kw_avg_max", "kw_min_avg", "kw_max_avg","kw_avg_avg","LDA_00" , "LDA_01" , "LDA_02" ,"LDA_03" , "LDA_04")
+
+sentiment_vars<-c("global_subjectivity" ,"global_sentiment_polarity", "global_rate_positive_words", "global_rate_negative_words","rate_positive_words",  "rate_negative_words","avg_positive_polarity"  ,"min_positive_polarity", "max_positive_polarity" , "avg_negative_polarity","min_negative_polarity",    "max_negative_polarity" ,"title_subjectivity" ,         "title_sentiment_polarity" , "abs_title_subjectivity"  ,      "abs_title_sentiment_polarity" )
+
+plot_hist_facet<-function(df, vars){
+  p<-subset(df, select = vars) %>% gather(vars) %>%  ggplot()+
+    geom_histogram(aes(value), fill="midnightblue")+
+    facet_wrap(~vars,scales = 'free_x')
+  return(p)
+}
+
+plot_hist_facet(df,token_vars)
+
+plot_hist_facet(df, kw_vars)
+
+plot_hist_facet(df, sentiment_vars)
 
 
 ```
 
 
 
+The dataset seems appropriate for modelling even at first glimpse. There are not missing values, disturbing extreme values, characters and so on. Even the original categorical variables like channel or weekday is converted into binary dummy variables, so it is appropriate for modelling. I train some basic model on this data, and if needed I will look for featrure engineering possibilities.
+
+
+
 # Prepare modeling
+
+Before modeling, I divide the data into train (85%) and test(15%) set.
 ```{r Prepare modelling}
 
 # Train test split
@@ -85,9 +109,9 @@ test<-df[-ind,]
 
 # Logit model as benchmark
 
-I trained a logit model on the train dataset with crossvalidation
+I trained a logit model on the train dataset with 5-fold cross-validation. I used 5-fold cross-validation in every model.
 
-```{r Logit}
+```{r Logit, message=FALSE, warning=FALSE}
 
 vars <- names(train[,1:(length(train)-1)])
 
@@ -110,14 +134,18 @@ logit_model <- caret::train(
     trControl = ctrl
   )
 
-logit_model$results # AUC 0.231
-Accuracy(logit_model$pred$pred,train$is_popular) # Accuracy 0.869
+logit_model$results %>% kable() # AUC 0.231
+Accuracy(logit_model$pred$pred,train$is_popular) %>% kable() # Accuracy 0.869
 
 confusionMatrix(logit_model$pred$pred,train$is_popular) #too much false negative
 ```
 
+
+The accuracyo of the model seems good for first trial, but the AUC values is below 0.5 which meens that the model is worse then random. In the confusion matrix we can see, that the rate of false positive is really high.
+
 # Lasso model
 
+The next step is a Lasso regression with 50 different lambda values. I assume that with the penalty parameter, the Lasso will perform better that the  logit.
 
 ```{r Lasso model}
 
@@ -133,17 +161,20 @@ lasso_model <- train(form,
                       trControl = ctrl,
                       tuneGrid = grid)
 # Check the output
-lasso_model$bestTune
-lasso_model$results
+lasso_model$bestTune %>% kable()
+lasso_model$results %>% kable()
 
-Accuracy(lasso_model$pred$pred,train$is_popular)
+Accuracy(lasso_model$pred$pred,train$is_popular) %>% kable()
 
 
 ```
 
+The both the accuracy and the AUC values of the Lasso is similar to the logit model, so the penalty did not help much.
+
 
 # Random forest
 
+My next model is a random forest, with arbitrary hyperparameters.
 
 ```{r Random forest, message=FALSE, warning=FALSE, eval=FALSE}
 
@@ -166,7 +197,7 @@ rf_model_p <- caret::train(
 )
 
 # save model
-save( rf_model_p , file = 'rf_model_1.RData' )
+save( rf_model_p , file = './Kaggle models/rf_model_1.RData' )
 
 rf_model_p$results
 
@@ -174,13 +205,17 @@ rf_model_p$results
 
 ```{r Evalutate rf}
 # Load model
-
+load("./Kaggle models/rf_model_1.RData")
+rf_model_p$results %>% kable()
+auc(as.numeric(test$is_popular),predict(rf_model_p,test, type = "prob")$yes)
 ```
 
+The random forest's AUC is still ~0.23 which is unacceptable. I did not try further tuning on the random forest, because probably it would not help much.
 
 # XGBoost
 
-```{r XGBoost}
+The next model I tried is XGBoost using the caret package. I used 5-fold cross validation and grid search on the dept of the tree and learning rate as you can see in the following code.
+```{r XGBoost,eval=FALSE }
 
 xgb_grid_1 = expand.grid(
   nrounds = 1000,
@@ -218,20 +253,15 @@ xgb_train_1$results
 xgb_train_1$bestTune
 
 
-saveRDS(xgb1_raw_model,file = "xgb1_raw_model.rds")
-#testmodel<-readRDS(file = "xgb1_raw_model.rds")
 
 saveRDS(xgb_train_1,"./Kaggle models/xgb_train_1.rds")
 #xgb_train_1<-readRDS("xgb_train_1.rds")
 
-#save(xgb_train_1,file ="xgb_train_1.RData")
+
 
 auc(as.numeric(test$is_popular),predict(xgb_train_1,test, type = "prob")$yes)
 #predict(xgb_train_1,test, type = "prob")
 Accuracy(predict(xgb_train_1,test),test$is_popular)
-```
-
-```{r Predict test with xgboost}
 
 test_submission<-subset(test_submission, select = -c(timedelta, article_id))
 
@@ -240,12 +270,25 @@ sample_submission$score<-predict(xgb_train_1,test_submission,type="prob")$yes
 
 write.csv(sample_submission,"sample_submission1.csv", row.names=FALSE)
 
+```
+
+```{r Evaluate xgboost1}
+
+xgb_train_1<-readRDS("./Kaggle models/xgb_train_1.rds")
+auc(as.numeric(test$is_popular),predict(xgb_train_1,test, type = "prob")$yes) # test AUC 0.746
+
+Accuracy(predict(xgb_train_1,test),test$is_popular) # accuracy 0.868
 
 ```
 
+The xgboost reached `r auc(as.numeric(test$is_popular),predict(xgb_train_1,test, type = "prob")$yes) ` AUC on the test set. On the submission set, the model reached  0.713333 AUC.
+
+
 # Train Xgb on full sample
 
-```{r full sample xgboost}
+I select the previous models best parameters based on the grid search and train a model on the full sample. This includes my test set too, so the test AUC value cannot be compared to the previous AUC but the additional data might reach better result on the submission test set.
+
+```{r full sample xgboost, eval=FALSE}
 
 xgb_grid_2 = expand.grid(
   nrounds = 1000,
@@ -285,6 +328,7 @@ sample_submission$score<-predict(xgb_train_1,test_submission,type="prob")$yes
 write.csv(sample_submission,"sample_submission2.csv", row.names=FALSE)
 
 ```
+
 ```{r xgb full 1 evaluate}
 xgb_train_full<-readRDS("Kaggle models/xgb_train_full.rds")
 xgb_train_full$results # 0.9394
@@ -292,8 +336,17 @@ auc(as.numeric(test$is_popular),predict(xgb_train_full,test, type = "prob")$yes)
 Accuracy(predict(xgb_train_full,test ),test$is_popular) 
 ```
 
+The model trained on the full data has obviously higher AUC on the training and 'fake test' sets, but actually the submission set's AUC did not change anything based on the public leaderboard.
 
-```{r Tuning XGboost}
+# Tuning XGBoost
+
+In the next step, I further tuned some parameters as you can see in the code below. 
+- max dept: 2,4
+- eta : 0.07,0.04,0.02
+- gamma: 0.05, 0.07, 0.1
+- colsample by tree: 0.3, 0.5, 0.7
+- min child weight: 0.5, 1,2
+```{r Tuning XGboost, eval=FALSE}
 xgb_grid_3 = expand.grid(
   nrounds = 1000,
   max_depth = c(2, 4), #depth of the tree 2
@@ -348,14 +401,16 @@ sample_submission$score<-predict(xgb_train_2,test_submission,type="prob")$yes
 write.csv(sample_submission,"sample_submission3.csv", row.names=FALSE)
 
 ```
+This model had higher AUC both on the train and test set than xgb_train_1. Also on the kaggle submission set, the model reached 0.7188 AUC.
 
+Thereafter, I train a model on the full sample with the best parameter setting based  on the previous grid search. This also increased the submission AUC to 0.71924. 
 
-```{r Train xgb2 best tune on full sample}
+```{r Train xgb2 best tune on full sample, eval=FALSE}
 
 xgb_grid_3 = expand.grid(
   nrounds = 1000,
   max_depth = c(4,6), #depth of the tree 
-  eta= 0.008, #learning rate 
+  eta= 0.02, #learning rate 
   gamma = 0.07, # minimum loss reduction
   colsample_bytree=0.7, # variables to choose from (ratio)
   min_child_weight=0.5,
@@ -388,89 +443,22 @@ write.csv(sample_submission,"./Kaggle submission/sample_submission4.csv", row.na
 
 ```{r Evaluate xgb full2}
 xgb_train_full2<-readRDS("./Kaggle models/xgb_train_full2.rds")
-
-
-```
-
-# Improve
-```{r xgb full3}
-xgb_grid_3 = expand.grid(
-  nrounds = 1000,
-  max_depth = c(4,6), #depth of the tree 
-  eta= 0.008, #learning rate 
-  gamma = 0.07, # minimum loss reduction
-  colsample_bytree=0.7, # variables to choose from (ratio)
-  min_child_weight=0.5,
-  subsample=0.5
-)
-
-
-set.seed(myseed)
-xgb_train_full3 = caret::train(
-  x = as.matrix(df[ ,1:(length(df)-1)]),
-  y = as.matrix(df[,length(df)]),
-  trControl = xgb_trcontrol_1,
-  tuneGrid = xgb_grid_3,
-  method = "xgbTree"
-)
-
-
-saveRDS(xgb_train_full3,"./Kaggle models/xgb_train_full3.rds")
-
-xgb_train_full3$results # AUC 0.9417
-
+xgb_train_full2$results # AUC 0.940977
 # Test
-auc(as.numeric(test$is_popular),predict(xgb_train_full3,test, type = "prob")$yes) # AUC 0.916
-
-# Predict submission sample
-sample_submission$score<-predict(xgb_train_full3,test_submission,type="prob")$yes
-write.csv(sample_submission,"./Kaggle submission/sample_submission7.csv", row.names=FALSE)
-```
-
-
-```{r xgb full4}
-xgb_grid_3 = expand.grid(
-  nrounds = 1000,
-  max_depth = c(8,10), #depth of the tree c(6,7,8)
-  eta= 0.003, #learning rate 
-  gamma = 0.07, # minimum loss reduction
-  colsample_bytree=0.7, # variables to choose from (ratio)
-  min_child_weight=0.5,
-  subsample=0.5
-)
-
-
-set.seed(myseed)
-xgb_train_3 = caret::train(
-  x = as.matrix(df[ ,1:(length(df)-1)]),
-  y = as.matrix(df[,length(df)]),
-  trControl = xgb_trcontrol_1,
-  tuneGrid = xgb_grid_3,
-  method = "xgbTree"
-)
-
-xgb_train_full4<-xgb_train_3
-saveRDS(xgb_train_full4,"./Kaggle models/xgb_train_full4.rds")
-
-xgb_train_full4$results # AUC train0.9387 AUC full 0.9427
-
-# Test
-auc(as.numeric(test$is_popular),predict(xgb_train_full4,test, type = "prob")$yes) # AUC train 0.7477 AUC full 0.977
-
-# Predict submission sample
-sample_submission$score<-predict(xgb_train_full4,test_submission,type="prob")$yes
-write.csv(sample_submission,"./Kaggle submission/sample_submission9.csv", row.names=FALSE)
-
-varImp(xgb_train_full4, scale=FALSE)
-xgb.importance(xgb_train_full4$finalModel$feature_names, model = xgb_train_full4$finalModel)
+auc(as.numeric(test$is_popular),predict(xgb_train_full2,test, type = "prob")$yes)
 
 ```
+
 
 
 # Deeplearning with keras
 
+To challenge the performance of deep learning, I train 2 neural networks with keras.
+The first one is a really simple model with 1 hidden layer. 
+
 ```{r Keras modelling}
 library(keras)
+library(tensorflow)
 # Prepare data
 set.seed(myseed)
 
@@ -535,22 +523,19 @@ plot(history1)
 ```
 
 ```{r Evaludate simple keras}
-simple_keras<-load_model_hdf5("./Kaggle models/simple_keras.h5")
+#simple_keras<-load_model_hdf5("./Kaggle models/simple_keras.h5")
 evaluate(simple_keras,valid_x,valid_y) # AUC 0.8752
 evaluate(simple_keras,test_x,test_y) # AUC 0.8703
 # prediction
-predict(simple_keras,test_x, type="prob")
 auc(as.numeric(test_y),predict(simple_keras,test_x))
-predict_classes(simple_keras,test_x)
-# Test 
-auc(as.numeric(test$is_popular),predict(xgb_train_2,test_x, type = "prob")$yes) # 0.7521
-#predict(xgb_train_1,test, type = "prob")
 
 ```
+The model has ~0.87 accuracy on the validation and the test set. However, the values are not really changing. The prediction are the same for almost every observation.
 
+The second keras model has 2 hidden layers, but the problem with the prediction is the same.
+I tried several different tuning for the keras models, but it did not help. The models are not learning well.
 
-
-```{r Keras model 2, message=FALSE, warning=FALSE, eval=FALSE}
+```{r Keras model 2, message=FALSE, warning=FALSE}
 
 keras_model_2 <- keras_model_sequential()
 keras_model_2 |>
@@ -576,7 +561,7 @@ batch_size=32
 history2 <-fit(
     keras_model_2,
     train_x, train_y,
-    epochs = 10,
+    epochs = 20,
     batch_size = batch_size,
     steps_per_epoch =floor(nrow(train_x)*0.8/batch_size), 
     #validation_data = list(valid_x,valid_y),
@@ -591,76 +576,317 @@ plot(history2)
 ```
 
 
-```{r Evaluate}
-keras_model_2<-load_model_hdf5("./Kaggle models/keras_model_2.h5", custom_objects = NULL, compile = TRUE)
+```{r Evaluate, message=FALSE, warning=FALSE}
+#keras_model_2<-load_model_hdf5("./Kaggle models/keras_model_2.h5", custom_objects = NULL, compile = TRUE)
 
 auc(valid_y,predict(keras_model_2,valid_x)) # 0.8734
 auc(test_y,predict(keras_model_2,test_x)) # 0.8686
 ```
 
 # Stacking models
+
+I wanted to test, whether the keras model improves the already tested xgboost with stacking. The public AUC on the kaggle submission test was just lower then just the xgboost.
 ```{r Stacking}
 sample_submission$score<-predict(keras_model_2,test_submission_x)[,2]*0.2+predict(xgb_train_full2,test_submission,type="prob")$yes*0.8
-write.csv(sample_submission,"./Kaggle submission/sample_submission5.csv", row.names=FALSE)
+#write.csv(sample_submission,"./Kaggle submission/sample_submission5.csv", row.names=FALSE)
 
 sample_submission$score<-predict(xgb_train_full,test, type = "prob")$yes*0.2+predict(xgb_train_full2,test_submission,type="prob")$yes*0.8
-write.csv(sample_submission,"./Kaggle submission/sample_submission6.csv", row.names=FALSE)
+#write.csv(sample_submission,"./Kaggle submission/sample_submission6.csv", row.names=FALSE)
 
 ```
 
-It did not improve the model
+It did not improve the model.
+
+# Improve XGBoost
+
+To further improve the XGBoost model, I decreased the learning rate (eta) to 0.008 and increased the depth to 4 or 6. Then I trained this model on the full dataset.
+
+```{r xgb full3, eval=FALSE}
+xgb_grid_3 = expand.grid(
+  nrounds = 1000,
+  max_depth = c(4,6), #depth of the tree 
+  eta= 0.008, #learning rate 
+  gamma = 0.07, # minimum loss reduction
+  colsample_bytree=0.7, # variables to choose from (ratio)
+  min_child_weight=0.5,
+  subsample=0.5
+)
+
+
+set.seed(myseed)
+xgb_train_full3 = caret::train(
+  x = as.matrix(df[ ,1:(length(df)-1)]),
+  y = as.matrix(df[,length(df)]),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+
+saveRDS(xgb_train_full3,"./Kaggle models/xgb_train_full3.rds")
+
+xgb_train_full3$results # AUC 0.9417
+
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_full3,test, type = "prob")$yes) # AUC 0.916
+
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_full3,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission7.csv", row.names=FALSE)
+
+# On train sample
+
+xgb_train_3 = caret::train(
+  x = as.matrix(train[ ,1:(length(train)-1)]),
+  y = as.matrix(train[,length(train)]),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+
+saveRDS(xgb_train_3,"./Kaggle models/xgb_train_3.rds")
+
+xgb_train_3$results # AUC 
+
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_3,test, type = "prob")$yes) 
+
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_full3,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission8.csv", row.names=FALSE)
+
+```
+
+```{r evaluate xgb full3}
+
+xgb_train_full3<-readRDS("./Kaggle models/xgb_train_full3.rds")
+xgb_train_full3$results # AUC 0.9417
+xgb_train_full3$bestTune
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_full3,test, type = "prob")$yes)
+
+# Variable importance
+varImp(xgb_train_full3, scale=FALSE)
+xgb.importance(xgb_train_full3$finalModel$feature_names, model = xgb_train_full3$finalModel)
+
+# train 3
+xgb_train_3<-readRDS("./Kaggle models/xgb_train_full3.rds")
+xgb_train_3$results
+
+```
+
+This model performed well obviously on the train test, and also on the sumbission set. The model reached AUC 0.72241. 
+
+Then I tried increasing the depth of the tree:
+```{r train full4,eval=FALSE }
+xgb_grid_3 = expand.grid(
+  nrounds = 1000,
+  max_depth = c(8,10), #depth of the tree 
+  eta= 0.003, #learning rate 
+  gamma = 0.07, # minimum loss reduction
+  colsample_bytree=0.7, # variables to choose from (ratio)
+  min_child_weight=0.5,
+  subsample=0.5
+)
+set.seed(myseed)
+xgb_train_full4 = caret::train(
+  x = as.matrix(df[ ,1:(length(df)-1)]),
+  y = as.matrix(df[,length(df)]),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+saveRDS(xgb_train_full4,"./Kaggle models/xgb_train_full4.rds")
+xgb_train_full4$results # AUC train0.9387 AUC full 0.9427
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_full4,test, type = "prob")$yes) # AUC train 0.7477 AUC full 0.977
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_full4,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission9.csv", row.names=FALSE)
+```
+
+
+
+Then I tried another grid search on just the train dataset, with several other max dept values , eta and colsamples as you can see below.
+
+```{r xgb full4 and train4, eval=FALSE}
+xgb_grid_3 = expand.grid(
+  nrounds = 1000,
+  max_depth = c(8,10,12,14), #depth of the tree c(6,7,8)
+  eta= c(0.003,0.007,0.01), #learning rate 
+  gamma = 0.07, # minimum loss reduction
+  colsample_bytree=c(0.7,0.5), # variables to choose from (ratio)
+  min_child_weight=0.5,
+  subsample=0.5
+)
+
+
+set.seed(myseed)
+xgb_train_4 = caret::train(
+  x = as.matrix(train[ ,1:(length(train)-1)]),
+  y = as.matrix(train[,length(train)]),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+
+saveRDS(xgb_train_4,"./Kaggle models/xgb_train_4.rds")
+
+xgb_train_4$bestTune # AUC train0.9396 AUC full 
+xgb_train_4$results
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_4,test, type = "prob")$yes) # AUC 0.7546 
+
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_4,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission10.csv", row.names=FALSE)
+
+varImp(xgb_train_full4, scale=FALSE)
+xgb.importance(xgb_train_full4$finalModel$feature_names, model = xgb_train_full4$finalModel)
+
+```
+
+The train AUC is a bit lower then before, but is test is high compared to other models train on just the train set. The AUC on the test was 0.71875 which is slightly lower than it was before.
+
+```{r}
+xgb_train_4<-readRDS("./Kaggle models/xgb_train_4.rds")
+xgb_train_full4<-readRDS("./Kaggle models/xgb_train_full4.rds")
+xgb_train_full4$results
+```
+
+
+
+Then I trained the model on the full dataset as well with the best tune parameters of the previous model.
+
+
+```{r xgb dept 8 full, eval=FALSE}
+xgb_grid_3 = expand.grid(
+  nrounds = 1000,
+  max_depth = 8, #depth of the tree c(6,7,8)
+  eta= 0.007, #learning rate 
+  gamma = 0.07, # minimum loss reduction
+  colsample_bytree=0.7, # variables to choose from (ratio)
+  min_child_weight=0.5,
+  subsample=0.5
+)
+
+
+set.seed(myseed)
+xgb_train_full5 = caret::train(
+  x = as.matrix(df[ ,1:(length(df)-1)]),
+  y = as.matrix(df[,length(df)]),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+
+saveRDS(xgb_train_full5,"./Kaggle models/xgb_train_full5.rds")
+
+ 
+xgb_train_full5$results # AUC train0.9396 AUC full 0.94159
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_full5,test, type = "prob")$yes) # AUC train 0.9781
+
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_full5,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission11.csv", row.names=FALSE)
+
+varImp(xgb_train_full5, scale=FALSE)
+xgb.importance(xgb_train_full5$finalModel$feature_names, model = xgb_train_full5$finalModel)
+
+
+```
+
+It is clearly overfitted on the  fake test set with 0.978 AUC, therefore it performed a bit worse on the submission set.
+
+```{r}
+xgb_train_full5<-readRDS("./Kaggle models/xgb_train_full5.rds")
+xgb_train_full5$results
+```
+
+
 
 # Feature engineering
 
+The data is very clean and structured as we can see on the histograms in the visualization section. However, some distibution as really skewed, similar to lognormal distribution, so I take the log of them to get closer to normal.
+
+I also added some flags for variables, which has a given value with really high frequency compared to other values.
+
+I used histograms of the distribution and the variable importance plots to select the variables.
 
 ```{r Feature engineering}
 library(reshape2)
-# convert  dummy variables to factors
-df<-read.csv("./online news data/train.csv")
-levels<-function(x){
-  return(factor(x,levels = list(1,0), labels = c('yes','no')))
-}
-df <- df %>% mutate_at(
-  .vars = vars(colnames(df)[startsWith(colnames(df),"data_channel") |
-                            startsWith(colnames(df),"weekday") |
-                            startsWith(colnames(df),"is_")]),
-  .funs = levels
-)
-df<-subset(df, select = -c(timedelta))
-str(df)
+
 names(df)
-token_vars<-c("n_tokens_title" ,"n_tokens_content","n_unique_tokens",  "n_non_stop_words" , "n_non_stop_unique_tokens", "num_hrefs" , "num_self_hrefs", "num_imgs","num_videos" , "average_token_length" ,"num_keywords")
 
-kw_vars<-c("kw_min_min" , "kw_max_min", "kw_avg_min"   , "kw_min_max" , "kw_max_max" , "kw_avg_max", "kw_min_avg", "kw_max_avg","kw_avg_avg","LDA_00" , "LDA_01" , "LDA_02" ,"LDA_03" , "LDA_04")
+plot_hist_facet(df,c("n_non_stop_unique_tokens","n_unique_tokens","num_imgs","num_videos","num_self_hrefs"))+
+  scale_x_continuous(limits = c(0,2))
 
-sentiment_vars<-c("global_subjectivity" ,"global_sentiment_polarity", "global_rate_positive_words", "global_rate_negative_words","rate_positive_words",  "rate_negative_words","avg_positive_polarity"  ,"min_positive_polarity", "max_positive_polarity" , "avg_negative_polarity","min_negative_polarity",    "max_negative_polarity" ,"title_subjectivity" ,         "title_sentiment_polarity" , "abs_title_subjectivity"  ,      "abs_title_sentiment_polarity" , "is_popular")
+# Calculating log values
+df <-df %>% mutate(
+  ln_n_non_stop_words = ifelse(n_non_stop_words==0,log(0.00000000000001),log(n_non_stop_words)),
+  ln_n_unique_tokens = ifelse(n_unique_tokens==0,log(0.00000000000001),log(n_unique_tokens)),
+  ln_num_videos = ifelse(num_videos==0,log(0.00000000000001),log(num_videos)),
+  ln_num_self_hrefs = ifelse(num_self_hrefs==0,log(0.00000000000001),log(num_self_hrefs)),
+  ln_kw_avg_min = ifelse(kw_avg_min==0,log(0.00000000000001),log(kw_avg_min)),
+  ln_kw_max_avg = ifelse(kw_max_avg==0,log(0.00000000000001),log(kw_max_avg)),
+  ln_kw_min_max = ifelse(kw_min_max==0,log(0.00000000000001),log(kw_min_max)),
+  ln_LDA_00 = ifelse(LDA_00==0,log(0.00000000000001),log(LDA_00)),
+  ln_LDA_01 = ifelse(LDA_01==0,log(0.00000000000001),log(LDA_01)),
+  ln_LDA_02 = ifelse(LDA_02==0,log(0.00000000000001),log(LDA_02)),
+  ln_LDA_03 = ifelse(LDA_03==0,log(0.00000000000001),log(LDA_03)),
+  ln_LDA_04 = ifelse(LDA_04==0,log(0.00000000000001),log(LDA_04))
+  
+  
+)
 
-plot_hist_facet<-function(df, vars){
-  p<-subset(df, select = vars) %>% gather(vars) %>%  ggplot()+
-    geom_histogram(aes(value), fill="midnightblue", bins=30)+
-    facet_wrap(~vars,scales = 'free_x')
-  return(p)
-}
+# Adding flags
+df <- df %>% mutate(
+  f_title_subjectivity =ifelse(title_subjectivity==0,1,0),
+  f_title_sentiment_polarity =ifelse(title_sentiment_polarity==0,1,0),
+  f_abs_title_subjectivity =ifelse(abs_title_subjectivity==0.5,1,0),
+  f_abs_title_sentiment_polarity=ifelse(abs_title_sentiment_polarity==0,1,0),
+  
+)
 
-plot_hist_facet(df,token_vars)
+# Apply the same on the submission  data
+test_submission_fe <- test_submission %>% mutate(
+  ln_n_non_stop_words = ifelse(n_non_stop_words==0,log(0.00000000000001),log(n_non_stop_words)),
+  ln_n_unique_tokens = ifelse(n_unique_tokens==0,log(0.00000000000001),log(n_unique_tokens)),
+  ln_num_videos = ifelse(num_videos==0,log(0.00000000000001),log(num_videos)),
+  ln_num_self_hrefs = ifelse(num_self_hrefs==0,log(0.00000000000001),log(num_self_hrefs)),
+  ln_kw_avg_min = ifelse(kw_avg_min==0,log(0.00000000000001),log(kw_avg_min)),
+  ln_kw_max_avg = ifelse(kw_max_avg==0,log(0.00000000000001),log(kw_max_avg)),
+  ln_kw_min_max = ifelse(kw_min_max==0,log(0.00000000000001),log(kw_min_max)),
+  ln_LDA_00 = ifelse(LDA_00==0,log(0.00000000000001),log(LDA_00)),
+  ln_LDA_01 = ifelse(LDA_01==0,log(0.00000000000001),log(LDA_01)),
+  ln_LDA_02 = ifelse(LDA_02==0,log(0.00000000000001),log(LDA_02)),
+  ln_LDA_03 = ifelse(LDA_03==0,log(0.00000000000001),log(LDA_03)),
+  ln_LDA_04 = ifelse(LDA_04==0,log(0.00000000000001),log(LDA_04))
+)
 
-plot_hist_facet(df, kw_vars)
+test_submission_fe <- test_submission_fe %>% mutate(
+  f_title_subjectivity =ifelse(title_subjectivity==0,1,0),
+  f_title_sentiment_polarity =ifelse(title_sentiment_polarity==0,1,0),
+  f_abs_title_subjectivity =ifelse(abs_title_subjectivity==0.5,1,0),
+  f_abs_title_sentiment_polarity=ifelse(abs_title_sentiment_polarity==0,1,0),
+  
+)
 
-plot_hist_facet(df, sentiment_vars)
+
 ```
 
 
-# Load models
-
-```{r}
-
-
-```
 
 # Train XGBoost with feature engineered data
 
+I trained XGBoost model on the feature engineered data. 
 
-```{r}
+```{r fe xgboost, eval=FALSE}
 train<-df[ind,]
 test<-df[-ind,]
 
@@ -677,10 +903,10 @@ xgb_trcontrol_1 = trainControl(
 
 xgb_grid_3 = expand.grid(
   nrounds = 1000,
-  max_depth = 4, #depth of the tree 2
-  eta= 0.02, #learning rate 0.07
+  max_depth = c(6,7), #depth of the tree 
+  eta= 0.008, #learning rate 
   gamma = 0.07, # minimum loss reduction
-  colsample_bytree=0.7, # variables to choose from (ratio)
+  colsample_bytree=0.8, # variables to choose from (ratio)
   min_child_weight=0.5,
   subsample=0.5
 )
@@ -688,23 +914,80 @@ xgb_grid_3 = expand.grid(
 
 
 set.seed(myseed)
-xgb_train_full3 = caret::train(
-  x = as.matrix(train[ ,1:(length(train)-1)]),
-  y = as.matrix(train[,length(train)]),
+xgb_train_5 = caret::train(
+  x = as.matrix(subset(train, select = -is_popular)),
+  y = as.matrix(train$is_popular),
   trControl = xgb_trcontrol_1,
   tuneGrid = xgb_grid_3,
   method = "xgbTree"
 )
 
 
-saveRDS(xgb_train_full3,"./Kaggle models/xgb_train_full3.rds")
+saveRDS(xgb_train_5,"./Kaggle models/xgb_train_5.rds")
 
-xgb_train_full2$results # AUC 0.940977
+xgb_train_5$results # AUC 0.9395
 
 # Test
-auc(as.numeric(test$is_popular),predict(xgb_train_full2,test, type = "prob")$yes) # AUC 0.8814
+auc(as.numeric(test$is_popular),predict(xgb_train_5,test, type = "prob")$yes) # AUC 0.7581
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_5,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission12.csv", row.names=FALSE)
 
+# On full sample
+set.seed(myseed)
+xgb_train_full6 = caret::train(
+  x = as.matrix(subset(df, select = -is_popular)),
+  y = as.matrix(df$is_popular),
+  trControl = xgb_trcontrol_1,
+  tuneGrid = xgb_grid_3,
+  method = "xgbTree"
+)
+
+
+saveRDS(xgb_train_full6,"./Kaggle models/xgb_train_full6.rds")
+
+xgb_train_full6$results # AUC 0.9417
+xgb_train_full6$bestTune
+
+# Test
+auc(as.numeric(test$is_popular),predict(xgb_train_full6,test, type = "prob")$yes) # AUC 0.919
+# Predict submission sample
+sample_submission$score<-predict(xgb_train_full6,test_submission,type="prob")$yes
+write.csv(sample_submission,"./Kaggle submission/sample_submission13.csv", row.names=FALSE)
 
 ```
 
+```{r load train 5 and full 6}
+xgb_train_5<-readRDS("./Kaggle models/xgb_train_5.rds")
+xgb_train_full6<-readRDS("./Kaggle models/xgb_train_full6.rds")
+```
+
+The models performed well, but not better than my best on the submission sample.
+
+# Stacking all XGBoost models
+
+Finally, I stacked all XGBoost models and it reached 0.72187 AUC on the kaggle leaderboard, which is my second best value. I did not outperform the xgb full 3 which has the best AUC out of my submissions.
+
+```{r Stack all xgb}
+sample_submission$score<-(predict(xgb_train_1,test_submission, type="prob")$yes+
+                            predict(xgb_train_2,test_submission,type="prob")$yes+
+                            predict(xgb_train_3,test_submission, type="prob")$yes+
+                            predict(xgb_train_4,test_submission, type="prob")$yes+
+                            predict(xgb_train_5,test_submission_fe, type="prob")$yes+
+                            predict(xgb_train_full,test_submission, type="prob")$yes+
+                            predict(xgb_train_full2,test_submission, type="prob")$yes+
+  predict(xgb_train_full3,test_submission,type="prob")$yes+
+  predict(xgb_train_full4,test_submission,type="prob")$yes+
+  predict(xgb_train_full5,test_submission,type="prob")$yes+
+  predict(xgb_train_full6,test_submission_fe,type="prob")$yes)/11
+
+
+write.csv(sample_submission,"./Kaggle submission/sample_submission14.csv", row.names=FALSE)
+```
+
+
+
+# Conclusion
+
+In this assignment I tried 5 different model types and tuning to predict, whether online news will be popular. I used cross-validation on all models, tried stacking and feature enginnering as well. The xgboost_train_full3 was my best model based on the Kaggle sumbission public AUC and I would use this model for real prediction.
 
